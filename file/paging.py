@@ -201,11 +201,10 @@ class Page(object):
         A FileFormatError is raised if the cell attributes being packed violates
         the file format expected '''
 
+        cell_type = _cells[self.type]
         if cell_type != type(cell):
             raise FileFormatError(f'Expected a cell type of {cell_type}, ' + \
                     f'got {type(cell)}')
-
-        cell_type = _cells[self.type]
         head = cell_type._head
 
         payload = cell.store_payload()

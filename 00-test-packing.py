@@ -1,4 +1,4 @@
-from file import *
+from file.valuetype import *
 from binascii import hexlify
 import datetime
 

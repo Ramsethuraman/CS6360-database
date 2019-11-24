@@ -1,9 +1,6 @@
-from file import *
-
-pt = PageTypes
-vt = ValueType
-
-
+from file.valuetype import ValueType as vt
+from file.paging import *
+from file.paging import PageTypes as pt
 
 types = [vt.SMALLINT, vt.TEXT, vt.FLOAT, vt.TINYINT]
 

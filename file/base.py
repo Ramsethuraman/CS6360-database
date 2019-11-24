@@ -1,3 +1,5 @@
+__all__ = ['FileFormatError', 'AbstractDBFile']
+
 class FileFormatError(Exception):
     pass
 
