@@ -24,6 +24,10 @@ def require_params(params, *names):
 
 
 class DataCell(object):
+    ''' Abstract superclass representing a data cell within a page block. This
+    contains only the attributes (and perhaps attributes of its subclasss also)
+    to allow easy updating of attributes '''
+
     __slots__ = ['left_child', 'rowid', 'tuple_types']
     def __init__(self, tuple_types, **params):
         if type(self) == DataCell:
@@ -35,12 +39,16 @@ class DataCell(object):
             setattr(self, key, val)
 
     def load_payload(self, payload):
+        ''' Loads the payload part of this cell into the cell '''
         raise NotImplementedError('Abstract method')
 
     def store_payload(self):
+        ''' Packs the payload part of this cell into bytes (if any) '''
         raise NotImplementedError('Abstract method')
         
 class IndexLeafCell(DataCell):
+    ''' This is a leaf cell of an index b tree '''
+
     __slots__ = ['rowids', 'key']
     _head = struct.Struct('>0sH0s')
     def __init__(self, *params, **kparams):
@@ -68,6 +76,8 @@ class IndexLeafCell(DataCell):
                 struct.pack('>' + 'I' * nrows, *self.rowids)
 
 class TableLeafCell(DataCell):
+    ''' This is a leaf cell of a table b+ tree '''
+
     __slots__ = ['tuples']
     _head = struct.Struct('>0sHI')
     def __init__(self, *params, **kparams):
@@ -86,6 +96,8 @@ class TableLeafCell(DataCell):
         return vpack(self.tuple_types, *self.tuples)
 
 class IndexInteriorCell(IndexLeafCell):
+    ''' This is a interior cell of an index b tree '''
+
     __slots__ = []
     _head = struct.Struct('>IH0s')
     def __init__(self, *params, **kparams):
@@ -93,6 +105,8 @@ class IndexInteriorCell(IndexLeafCell):
         super().__init__(*params, **kparams)
 
 class TableInteriorCell(DataCell):
+    ''' This is a interior cell of a table b+ tree '''
+
     __slots__ = []
     _head = struct.Struct('>I0sI')
     def __init__(self, *params, **kparams):
@@ -133,6 +147,10 @@ def unnull(tup):
 
 
 class Page(object):
+    ''' This is a page object that represents a page within an index or table
+    file. This contains only the attributes of such a page, and not the actual
+    bytes itself (to allow for easy updating). '''
+
     __slots__ = ['cur_pnum', 'type', 'pnum_right', 'pnum_parent', 'cells',
             'tuple_types']
 
@@ -150,6 +168,11 @@ class Page(object):
         self.cells = list(cells)
 
     def unpack_cell_from(self, buff, offset = 0):
+        ''' Unpacks byte data from an offset to a cell object exposing its
+        attributes. This page will not automatically add it to itself, but if
+        this should be added, the user can simply modify the array field "cells"
+        that is exposed from this object. '''
+
         cell_type = _cells[self.type]
         head = cell_type._head
         left_child, payload_size, rowid = null(head.unpack_from(buff, off))
@@ -171,6 +194,17 @@ class Page(object):
         return (cell, payload_size + head.size)
 
     def pack_cell(self, cell):
+        ''' This will pack a cell according to the type specs of this page
+        object. Note that the correct cell type should be passed, that matches
+        our page type. 
+        
+        A FileFormatError is raised if the cell attributes being packed violates
+        the file format expected '''
+
+        if cell_type != type(cell):
+            raise FileFormatError(f'Expected a cell type of {cell_type}, ' + \
+                    f'got {type(cell)}')
+
         cell_type = _cells[self.type]
         head = cell_type._head
 
@@ -194,7 +228,7 @@ def readn(file, size):
 
 class PagingFile(object):
     ''' Represents a paginated B-tree like structure that lays out key and
-    value pairs within a searchable paging system'''
+    value pairs within a searchable paging system. '''
 
     def __init__(self, filename, tuple_types, page_size = 512):
         ''' Create paging DB file from a specific file. '''
@@ -205,7 +239,11 @@ class PagingFile(object):
 
     def read_page(self, pagenum):
         ''' Reads a page from disk into memory, representing this page as a Page
-        object.'''
+        object.
+        
+        This will raise a FileFormatError whenever it detects some violation on
+        the predefined file specifications vs what it reads from the actual
+        underlying file on disk.'''
 
         # Seek to the respective page.
         f = self.__file
@@ -249,9 +287,16 @@ class PagingFile(object):
         page_data.cells = cells
         return page_data
 
-    def write_page(self, page, pagenum=None):
-        if pagenum == None:
-            pagenum = page.cur_pnum
+    def write_page(self, page):
+        ''' Writes a page back onto the backing file storage. 
+        
+        By default, this will write back to the page number that this page was
+        read out from. If that should be changed, the cur_pnum attribute of the
+        page can be changed to write back to a diffferent page number. 
+        
+        This will raise FileFormatError whenenver it detects a violation on the
+        predefined file specifications vs the attributes of the page being
+        written. '''
 
         # Pack the cells
         cells = [page.pack_cell(c) for c in page.cells]
@@ -282,6 +327,6 @@ class PagingFile(object):
 
         # Seek to the respective page and write
         f = self.__file
-        f.seek(pagenum * self.__page_size)
+        f.seek(page.cur_pnum * self.__page_size)
         f.write(page_data)
 
