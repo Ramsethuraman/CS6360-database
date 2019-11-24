@@ -1,3 +1,5 @@
+class FileFormatError(Exception):
+    pass
 
 class AbstractDBFile(object):
     ''' This is the abstract API used to read and write records from a database

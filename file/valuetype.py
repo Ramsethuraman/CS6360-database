@@ -19,12 +19,15 @@ as needed (primitive or extended primitive)
 
 '''
 
-__all__ = ['Date', 'DateTime', 'Time', 'DBData', 'ValueType', 'Year', 
-        'parse_from_int', 'parse_from_str', 'vpack', 'vunpack', 'vunpack1']
+__all__ = ['Date', 'DateTime', 'Time', 'DBData', 'ValueType', 'Year',
+        'check_type_compat', 'parse_from_int', 'parse_from_str', 'vpack',
+        'vpack1', 'vunpack', 'vunpack1', 'vunpack_from', 'vunpack1_from']
 
 import enum
 import datetime
 import struct
+
+from .base import FileFormatError
 
 def _strptime(fmts, timestr):
     if type(fmts) is str:
@@ -44,22 +47,26 @@ class DBData(object):
     case when we need to define some artificial type that doesn't automatically
     get packed/unpacked by struct.'''
 
+    def __init__(self):
+        if type(self) == DBData:
+            raise ValueError('Instantiation of abstract type')
+
     @classmethod
     def parse(cls, strval):
         ''' Abstract parse from string function for all DBData objects. Defaults
         to throwing an error '''
-        raise ValueError(f'Cannot convert a string to a(n) {cls.__name__} value')
+        raise FileFormatError(f'Cannot convert a string to a(n) {cls.__name__} value')
 
     @staticmethod
     def parse_int(intval):
-        raise ValueError(f'Cannot convert an integer to a(n) {cls.__name__} value')
+        raise FileFormatError(f'Cannot convert an integer to a(n) {cls.__name__} value')
 
     @classmethod
     def decode(cls, numb):
         return cls(numb)
 
     def encode(self):
-        raise NotImplementedError('Please implement this in the subclass')
+        raise NotImplementedError('Abstract method')
 
     def __eq__(self, other):
         return self.encode() == other.encode()
@@ -91,7 +98,7 @@ class Year(DBData):
     def __init__(self, year):
         x = year - 2000
         if not (-128 <= x <= 127):
-            raise ValueError('Not in range of supported years!')
+            raise FileFormatError('Not in range of supported years!')
         self.__year = year
 
     def __str__(self):
@@ -125,17 +132,17 @@ class Time(DBData):
     def __init__(self, hour, minute=None, second=None, millis=None):
         if minute == None:
             if not (0 <= hour < 86400000):
-                raise ValueError('Bad millis offset')
+                raise FileFormatError('Bad millis offset')
             self.__time = hour
         else:
             if not (0 <= hour < 24):
-                raise ValueError('Bad hour')
+                raise FileFormatError('Bad hour')
             if not (0 <= minute < 60):
-                raise ValueError('Bad minute')
+                raise FileFormatError('Bad minute')
             if not (0 <= second < 60):
-                raise ValueError('Bad second')
+                raise FileFormatError('Bad second')
             if not (0 <= millis < 1000):
-                raise ValueError('Bad millis')
+                raise FileFormatError('Bad millis')
             self.__time = (((hour * 60) + minute) * 60 + second) * 1000 + millis
 
     def __str__(self):
@@ -178,7 +185,7 @@ class DateTime(DBData):
             elif type(d) is datetime.datetime:
                 self.__time = d
             else:
-                raise ValueError('Invalid type')
+                raise FileFormatError('Invalid type')
         else:
             if millis != None:
                 millis *= 1000
@@ -229,7 +236,7 @@ class Date(DateTime):
                 month = d.month
                 day = d.day
             else:
-                raise ValueError('Invalid type')
+                raise FileFormatError('Invalid type')
 
         super().__init__(year, month, day)
 
@@ -242,10 +249,10 @@ class ValueType(enum.IntEnum):
 
 __type_map = {
         ValueType.NULL:     (ValueType.NULL,     0, '',  None),
-        ValueType.TINYINT:  (ValueType.TINYINT,  1, 'B', int),
-        ValueType.SMALLINT: (ValueType.SMALLINT, 2, 'H', int),
-        ValueType.INT:      (ValueType.INT,      4, 'I', int),
-        ValueType.BIGINT:   (ValueType.BIGINT,   8, 'Q', int),
+        ValueType.TINYINT:  (ValueType.TINYINT,  1, 'b', int),
+        ValueType.SMALLINT: (ValueType.SMALLINT, 2, 'h', int),
+        ValueType.INT:      (ValueType.INT,      4, 'i', int),
+        ValueType.BIGINT:   (ValueType.BIGINT,   8, 'q', int),
         ValueType.FLOAT:    (ValueType.FLOAT,    4, 'f', float),
         ValueType.DOUBLE:   (ValueType.DOUBLE,   8, 'd', float),
         ValueType.YEAR:     (ValueType.YEAR,     1, 'b', Year),
@@ -259,6 +266,15 @@ for i in range(ValueType.TEXT, MAX_TYPE + 1):
     leng = i - ValueType.TEXT
     __type_map[i] = (ValueType.TEXT, leng, str(leng) + 's', bytes)
 
+def check_type_compat(expected, actual):
+    if expected == actual or actual == 0:
+        return
+    n_actual = hex(actual)
+    n_expected = hex(expected)
+    if actual in __type_map: n_actual = __type_map[actual][0].name
+    if expected in __type_map: n_expected = __type_map[expected][0].name
+    raise FileFormatError(f'type {n_actual} not compatible with type {n_expected}')
+
 def vpack(typeids, *data):
     ''' Packs some data, given its typeids, into a marshalled, packed tuple,
     that includes number of items in tuple and typeid's. This returns a stream
@@ -268,22 +284,23 @@ def vpack(typeids, *data):
     typeids2 = []
 
     if len(typeids) != len(data):
-        raise ValueError(f'Expected {len(typeids)} data points, only got {len(data)} data points')
+        raise FileFormatError(f'Expected {len(typeids)} data points, only got {len(data)} data points')
 
     full_fmt = '>B' + 'B' * len(typeids)
     for typeid, data in zip(typeids, data):
         if typeid not in __type_map:
-            raise ValueError(f'Invalid type-id: 0x{typeid:x}')
+            raise FileFormatError(f'Invalid type-id: 0x{typeid:x}')
 
         typeid, _, fmt, dtype = __type_map[typeid]
 
         # Check data-type of data
         if typeid == ValueType.NULL:
             if data != None:
-                raise ValueError('Data should be None for NULL type')
+                raise FileFormatError('Data should be None for NULL type')
         else:
             if type(data) != dtype:
-                raise ValueError('Data is not proper type to marshall')
+                raise FileFormatError('Data is not proper type to ' + \
+                    f'marshall, got {type(data)}, expected {dtype}')
 
         # Marshall value if needed
         if isinstance(data, DBData):
@@ -293,7 +310,7 @@ def vpack(typeids, *data):
         if typeid == ValueType.TEXT:
             typeid = ValueType.TEXT + len(data)
             if typeid > MAX_TYPE:
-                raise ValueError('Text is too long.')
+                raise FileFormatError('Text is too long.')
             _, _, fmt, dtype = __type_map[typeid]
 
         typeids2.append(typeid)
@@ -303,25 +320,36 @@ def vpack(typeids, *data):
 
     return struct.pack(full_fmt, len(typeids), *(typeids2 + data2)) 
 
-def vunpack1(data):
-    ''' Unpacks one data point (without a header for number of columns).
-    Otherwise this does exactly the same as vunpack, but returns the actual
-    value, not a 1-tuple'''
+def vpack1(typeid, data):
+    ''' Packs a single data point, given its typeids, into a marshalled, packed
+    tuple, that includes number of items in tuple and typeid (that does not
+    include the number of columns)'''
 
-    if type(data) is not bytes:
-        raise ValueError('Expected data to be of type bytes')
-    return vunpack(b'\x01' + data)[0]
+    return vpack([typeid], data)[1:]
 
 def vunpack(data):
-    ''' Unpacks an marshalled tuple data with unknown types. This will return a
+    ''' Unpacks an marshalled tuple data with unknown types. This will return
     a list of data points that has been unpacked and unmarshalled. The data
     given MUST have exactly the same size of the tuple.'''
+    return vunpack_from(data, 0, True)[0]
+
+def vunpack_from(data, offset=0, exact=False):
+    ''' Unpacks an marshalled tuple data with unknown types from some buffer.
+    This will return a list of data points that has been unpacked and
+    unmarshalled. Data must be AT LEAST the size of the tuple. On return, it
+    will return a tuple of the element tuple and total size in bytes. '''
 
     if type(data) is not bytes:
-        raise ValueError('Expected data to be of type bytes')
+        raise FileFormatError('Expected data to be of type bytes')
+
+    if len(data) == 0:
+        raise FileFormatError('Short read in unpack')
 
     cols = data[0]
-    col_types = struct.unpack_from('>x' + 'B' * cols, data)
+    col_types = struct.unpack_from('>x' + 'B' * cols, data, offset)
+
+    if offset + cols + 1 > len(data):
+        raise FileFormatError('Short read in unpack')
 
     full_fmt = '>' + 'x' * (cols + 1)
     dtypes = []
@@ -333,7 +361,13 @@ def vunpack(data):
         full_fmt += fmt
         dtypes.append(dtype)
 
-    datas = list(struct.unpack(full_fmt, data))
+    fmt = struct.Struct(full_fmt)
+    if offset + fmt.size > len(data):
+        raise FileFormatError('Short read in unpack')
+    elif exact and offset + fmt.size != len(data):
+        raise FileFormatError('Not exact unpack')
+
+    datas = list(struct.unpack_from(full_fmt, data, offset))
     for ind, data in enumerate(datas):
         # Special case for NULL
         dtype = dtypes[ind]
@@ -342,7 +376,26 @@ def vunpack(data):
             data = dtype.decode(data)
         datas[ind] = data
 
-    return tuple(datas)
+    return (tuple(datas), fmt.size)
+
+def vunpack1_from(data, offset=0):
+    ''' Unpacks one data point from an offset (without a header for number of
+    columns).  Otherwise this does exactly the same as vunpack, but returns the
+    actual value, not a 1-tuple. Size of data must be at least the size of the
+    data type and the typeid byte'''
+
+    data2 = data[offset:]
+    return vunpack_from(data, offset)
+
+def vunpack1(data):
+    ''' Unpacks one data point (without a header for number of columns).
+    Otherwise this does exactly the same as vunpack, but returns the actual
+    value, not a 1-tuple'''
+
+    if type(data) is not bytes:
+        raise FileFormatError('Expected data to be of type bytes')
+    return vunpack(b'\x01' + data)[0]
+
 
 def parse_from_str(typeid, strval):
     ''' Takes a string literal (minus quotations) and attempts to parse it into
@@ -353,7 +406,7 @@ def parse_from_str(typeid, strval):
     '''
 
     if typeid not in __type_map:
-        raise ValueError(f'Invalid type-byte: 0x{typeid:x}')
+        raise FileFormatError(f'Invalid type-byte: 0x{typeid:x}')
 
     _, _, _, dtype = __type_map[typeid]
 
@@ -372,7 +425,7 @@ def parse_from_int(typeid, intval):
     '''
 
     if typeid not in __type_map:
-        raise ValueError(f'Invalid type-byte: 0x{typeid:x}')
+        raise FileFormatError(f'Invalid type-byte: 0x{typeid:x}')
 
     _, _, _, dtype = __type_map[typeid]
 
