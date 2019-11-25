@@ -1,7 +1,7 @@
 import enum
 import struct
 from .base import FileFormatError
-from .valuetype import vpack1, vpack, vunpack1_from, vunpack_from, \
+from .valuetype import vpack1, vpack, vunpack, vunpack1_from, \
     check_type_compat
 
 __all__ = ['PageTypes', 'Page', 'PagingFile', 'create_cell', 'INVALID_OFF']
@@ -18,7 +18,7 @@ s_page_offs = struct.Struct('>H')
 INVALID_OFF = 0xffffffff
 
 def require_params(params, *names):
-    for n in params:
+    for n in names:
         if params.get(n, None) == None:
             raise ValueError(f'Require parameter "{n}"')
 
@@ -38,6 +38,10 @@ class DataCell(object):
         for key, val in params.items():
             setattr(self, key, val)
 
+    def display(self, tablevel = 0):
+        ''' Displays this data cell as a multiline entity '''
+        raise NotImplementedError('Abstract method')
+
     def load_payload(self, payload):
         ''' Loads the payload part of this cell into the cell '''
         raise NotImplementedError('Abstract method')
@@ -53,8 +57,17 @@ class IndexLeafCell(DataCell):
     _head = struct.Struct('>0sH0s')
     def __init__(self, *params, **kparams):
         super().__init__(*params **kparams)
+        self.rowids = []
+        self.key = b''
         if len(self.tuple_types) != 1:
             raise FileFormatError('Mismatch size of tuple length')
+
+    def display(self, tablevel = 0):
+        tb = '  ' * tablevel
+        return f'{tb}IndexLeafCell {{\n' + \
+                f'{tb}  key: {repr(self.key)}\n' + \
+                f'{tb}  rowids: {repr(rowids)}\n' + \
+                f'{tb}}}'
 
     def load_payload(self, payload):
         if len(payload) < 2:
@@ -84,6 +97,14 @@ class TableLeafCell(DataCell):
         require_params(kparams, 'rowid')
         super().__init__(*params, **kparams)
 
+    def display(self, tablevel = 0):
+        tb = '  ' * tablevel
+        ret = f'{tb}TableLeafCell {{\n' + \
+                f'{tb}  rowid: {hex(self.rowid)},\n' + \
+                f'{tb}  tuples: {repr(self.tuples)}\n' + \
+                f'{tb}}}'
+        return ret
+
     def load_payload(self, payload):
         tuples = vunpack(payload)
         if len(tuples) != len(self.tuple_types):
@@ -104,6 +125,14 @@ class IndexInteriorCell(IndexLeafCell):
         require_params(kparams, 'left_child')
         super().__init__(*params, **kparams)
 
+    def display(self, tablevel = 0):
+        tb = '  ' * tablevel
+        return f'{tb}IndexInteriorCell {{\n' + \
+                f'{tb}  left_child: {hex(self.left_child)}\n' + \
+                f'{tb}  key: {repr(self.key)}\n' + \
+                f'{tb}  rowids: {repr(rowids)}\n' + \
+                f'{tb}}}'
+
 class TableInteriorCell(DataCell):
     ''' This is a interior cell of a table b+ tree '''
 
@@ -118,6 +147,10 @@ class TableInteriorCell(DataCell):
 
     def store_payload(self):
         return b''
+
+    def display(self, tablevel = 0):
+        tb = '  ' * tablevel
+        return f'{tb}TableInteriorCell {{ left_child: {hex(self.left_child)} }}'
 
 _cells = {
         PageTypes.TableLeaf: TableLeafCell,
@@ -151,8 +184,10 @@ class Page(object):
     file. This contains only the attributes of such a page, and not the actual
     bytes itself (to allow for easy updating). '''
 
-    __slots__ = ['cur_pnum', 'type', 'pnum_right', 'pnum_parent', 'cells',
+    __slots__ = ['cur_pnum', '_type', 'pnum_right', 'pnum_parent', 'cells',
             'tuple_types']
+
+    
 
     @staticmethod
     def get_page_header_size(self):
@@ -167,6 +202,30 @@ class Page(object):
         self.pnum_parent = pnum_parent
         self.cells = list(cells)
 
+    def __str__(self):
+        return f'Page({self.type})'
+
+    def __repr__(self):
+        return self.display(0)
+
+    def _get_type(self):
+        return self._type
+    def _set_type(self, newtype):
+        self._type = PageTypes(newtype)
+    type = property(_get_type, _set_type)
+
+    def display(self, tablevel = 0):
+        tb = '  ' * tablevel
+        ret = f'{tb}Page({self.cur_pnum}) {{\n' +  \
+                f'{tb}  type: {self.type.name},\n' + \
+                f'{tb}  pnum_right: {hex(self.pnum_right)},\n' + \
+                f'{tb}  pnum_parent: {hex(self.pnum_parent)},\n' + \
+                f'{tb}  cells: [\n'
+        for c in self.cells:
+            ret += c.display(tablevel + 2) + ',\n'
+        ret += f'{tb}  ]\n{tb}}}'
+        return ret
+
     def unpack_cell_from(self, buff, offset = 0):
         ''' Unpacks byte data from an offset to a cell object exposing its
         attributes. This page will not automatically add it to itself, but if
@@ -175,18 +234,19 @@ class Page(object):
 
         cell_type = _cells[self.type]
         head = cell_type._head
-        left_child, payload_size, rowid = null(head.unpack_from(buff, off))
+        left_child, payload_size, rowid = null(head.unpack_from(buff, offset))
 
-        if pyaload_size == 0:
+        if payload_size == 0:
             raise FileFormatError('Invalid payload size')
 
         if payload_size:
-            poff = off + head.size
+            poff = offset + head.size
             if payload_size + poff > len(buff):
                 raise FileFormatError('Invalid payload size')
             payload = buff[poff:poff + payload_size]
         else:
             payload_size = 0
+            payload = None
 
         cell = cell_type(self.tuple_types, left_child = left_child, 
                 rowid = rowid)
@@ -258,7 +318,7 @@ class PagingFile(object):
             poff_start = 0x10000
 
         # File-format checking
-        if ptype not in s_cell_headers:
+        if ptype not in _cells:
             raise FileFormatError(f'Invalid page type: 0x{ptype:x}')
 
         # Make sure our data chunks do not overlap
@@ -269,16 +329,17 @@ class PagingFile(object):
         if poff_start < cell_off_end:
             raise FileFormatError(f'Invalid start offset (0x{poff_start:x})')
 
-        page_data = Page(self, pagenum, ptype, pnum_right, pnum_parent)
+        page_data = Page(pagenum, ptype, self.__tuple_types, pnum_right,
+                pnum_parent)
 
         # Parse each cell
         cells = []
         offs = s_page_offs.iter_unpack(page[head_sz:cell_off_end])
         prev_off = len(page)
-        for off in offs:
+        for off, in offs:
             if off < cell_off_end:
                 raise FileFormatError(f'Invalid cell offset (0x{off:x})')
-            cell, size = page.unpack_cell(ptype, page, off)
+            cell, size = page_data.unpack_cell_from(page, off)
             if off + size > prev_off:
                 raise FileFormatError(f'Overlapping cells or bad offset')
             cells.append(cell)

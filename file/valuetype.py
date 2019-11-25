@@ -77,6 +77,36 @@ class DBData(object):
     def __ge__(self, other):
         return self.encode() >= other.encode()
 
+class Float32(float, DBData):
+    ''' Wraps around a float value so that a string representation of this will
+    be (hopefully) as if it were "32-bit" or single precision. More specifically
+    it forces up to 6 decimal places of precision, which should almost entirely
+    hide the "imprecisions" when casted from a double float to single float and
+    back to a double again.'''
+
+    @classmethod
+    def parse(cls, strval):
+        return cls(strval)
+
+    @classmethod
+    def parse_int(cls, intval):
+        return cls(intval)
+
+    @classmethod
+    def decode(cls, numb):
+        return cls(numb)
+
+    def __init__(self, val):
+        float.__init__(self)
+
+    def __str__(self):
+        return f'{self:g}'
+
+    def __repr__(self):
+        return str(self)
+
+    def encode(self):
+        return self
 
 class Year(DBData):
     ''' This type wraps around some year. This is a special numeric type that is
@@ -253,7 +283,7 @@ __type_map = {
         ValueType.SMALLINT: (ValueType.SMALLINT, 2, 'h', int),
         ValueType.INT:      (ValueType.INT,      4, 'i', int),
         ValueType.BIGINT:   (ValueType.BIGINT,   8, 'q', int),
-        ValueType.FLOAT:    (ValueType.FLOAT,    4, 'f', float),
+        ValueType.FLOAT:    (ValueType.FLOAT,    4, 'f', Float32),
         ValueType.DOUBLE:   (ValueType.DOUBLE,   8, 'd', float),
         ValueType.YEAR:     (ValueType.YEAR,     1, 'b', Year),
         ValueType.TIME:     (ValueType.TIME,     4, 'I', Time),
@@ -267,6 +297,7 @@ for i in range(ValueType.TEXT, MAX_TYPE + 1):
     __type_map[i] = (ValueType.TEXT, leng, str(leng) + 's', bytes)
 
 def check_type_compat(expected, actual):
+    if actual in __type_map: actual = __type_map[actual][0]
     if expected == actual or actual == 0:
         return
     n_actual = hex(actual)

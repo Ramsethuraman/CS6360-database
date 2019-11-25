@@ -24,7 +24,7 @@ cells = [create_cell(pt.TableLeaf, types, rowid=1, tuples = data[0]),
 page = Page(0, pt.TableLeaf, types, 1, 2, cells)
 dbfile.write_page(page)
 
-cells = [create_cell(pt.TableLeaf, types, rowid=4, tuples = data[4])]
+cells = [create_cell(pt.TableLeaf, types, rowid=5, tuples = data[4])]
 page = Page(1, pt.TableLeaf, types, INVALID_OFF, 2, cells)
 dbfile.write_page(page)
 
