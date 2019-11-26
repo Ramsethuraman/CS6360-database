@@ -184,15 +184,16 @@ class Page(object):
     file. This contains only the attributes of such a page, and not the actual
     bytes itself (to allow for easy updating). '''
 
-    __slots__ = ['cur_pnum', '_type', 'pnum_right', 'pnum_parent', 'cells',
-            'tuple_types']
+    __slots__ = ['dbfile', 'cur_pnum', '_type', 'pnum_right', 'pnum_parent',
+            'cells', 'tuple_types']
 
     @staticmethod
     def get_page_header_size():
         return s_page_header.size
 
-    def __init__(self, pagenum, ptype, tuple_types, pnum_right,
+    def __init__(self, dbfile, pagenum, ptype, tuple_types, pnum_right,
             pnum_parent, cells = []):
+        self.dbfile = dbfile
         self.cur_pnum = pagenum
         self.type = ptype
         self.tuple_types = tuple_types
@@ -214,7 +215,7 @@ class Page(object):
 
     @property
     def page_size(self):
-        return self.__page_size
+        return self.dbfile.page_size
 
     def display(self, tablevel = 0):
         tb = '  ' * tablevel
@@ -240,7 +241,7 @@ class Page(object):
         more cell data. '''
         cells_len = sum(len(self.pack_cell(c)) for c in self.cells)
         head_len = Page.get_page_header_size() + len(self.cells) * 2
-        return self.__page_size - (cells_len + head_len)
+        return self.page_size - (cells_len + head_len)
 
     def unpack_cell_from(self, buff, offset = 0):
         ''' Unpacks byte data from an offset to a cell object exposing its
@@ -311,6 +312,10 @@ class PagingFile(object):
         self.__filename = filename
         self.__page_size = page_size
         self.__tuple_types = tuple_types
+
+    @property
+    def page_size(self):
+        return self.__page_size
         
     def next_page(self):
         sz = self.__file.seek(0, 2)
@@ -349,7 +354,7 @@ class PagingFile(object):
         if poff_start < cell_off_end:
             raise FileFormatError(f'Invalid start offset (0x{poff_start:x})')
 
-        page_data = Page(pagenum, ptype, self.__tuple_types, pnum_right,
+        page_data = Page(self, pagenum, ptype, self.__tuple_types, pnum_right,
                 pnum_parent)
 
         # Parse each cell
