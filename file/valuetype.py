@@ -100,7 +100,8 @@ class Float32(float, DBData):
         float.__init__(self)
 
     def __str__(self):
-        return f'{self:g}'
+        s = f'{self:g}'
+        return s if '.' in s else s + '.0'
 
     def __repr__(self):
         return str(self)

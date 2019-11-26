@@ -187,10 +187,8 @@ class Page(object):
     __slots__ = ['cur_pnum', '_type', 'pnum_right', 'pnum_parent', 'cells',
             'tuple_types']
 
-    
-
     @staticmethod
-    def get_page_header_size(self):
+    def get_page_header_size():
         return s_page_header.size
 
     def __init__(self, pagenum, ptype, tuple_types, pnum_right,
@@ -214,6 +212,10 @@ class Page(object):
         self._type = PageTypes(newtype)
     type = property(_get_type, _set_type)
 
+    @property
+    def page_size(self):
+        return self.__page_size
+
     def display(self, tablevel = 0):
         tb = '  ' * tablevel
         ret = f'{tb}Page({self.cur_pnum}) {{\n' +  \
@@ -225,6 +227,20 @@ class Page(object):
             ret += c.display(tablevel + 2) + ',\n'
         ret += f'{tb}  ]\n{tb}}}'
         return ret
+
+    def get_cell_size(self, cell):
+        ''' Computes the total amount of space this cell would take if it were
+        packed into this page. It specifically accounts for both the offset
+        bytes and the actual cell data '''
+
+        return len(self.pack_cell(c)) + 2 
+
+    def get_free_size(self):
+        ''' Obtains the amount of bytes left in this page that we can use to put
+        more cell data. '''
+        cells_len = sum(len(self.pack_cell(c)) for c in self.cells)
+        head_len = Page.get_page_header_size() + len(self.cells) * 2
+        return self.__page_size - (cells_len + head_len)
 
     def unpack_cell_from(self, buff, offset = 0):
         ''' Unpacks byte data from an offset to a cell object exposing its
@@ -295,6 +311,10 @@ class PagingFile(object):
         self.__filename = filename
         self.__page_size = page_size
         self.__tuple_types = tuple_types
+        
+    def next_page(self):
+        sz = self.__file.seek(0, 2)
+        return (sz + self.__page_size - 1) // self.__page_size
 
     def read_page(self, pagenum):
         ''' Reads a page from disk into memory, representing this page as a Page
@@ -353,10 +373,16 @@ class PagingFile(object):
         By default, this will write back to the page number that this page was
         read out from. If that should be changed, the cur_pnum attribute of the
         page can be changed to write back to a diffferent page number. 
+
+        If page number is -1, this will append this page as a new page to the
+        end of the file
         
         This will raise FileFormatError whenenver it detects a violation on the
         predefined file specifications vs the attributes of the page being
         written. '''
+
+        if page.cur_pnum == -1:
+            page.cur_pnum = self.next_page()
 
         # Pack the cells
         cells = [page.pack_cell(c) for c in page.cells]
