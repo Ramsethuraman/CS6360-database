@@ -144,7 +144,10 @@ class TableInteriorCell(DataCell):
 
     def display(self, tablevel = 0):
         tb = '  ' * tablevel
-        return f'{tb}TableInteriorCell {{ left_child: {hex(self.left_child)} }}'
+        return f'{tb}TableInteriorCell {{\n' + \
+                f'{tb}  left_child: {hex(self.left_child)}\n' + \
+                f'{tb}  rowid: {hex(self.rowid)}\n' + \
+                f'{tb}}}'
 
 _cells = {
         PageTypes.TableLeaf: TableLeafCell,

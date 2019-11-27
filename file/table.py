@@ -163,7 +163,7 @@ class TableFile(PagingFile):
         if self.__root == None:
             rowid = self._next_rowid()
             cell = create_cell(pt.TableLeaf, self.tuple_types, 
-                    rowid = self._next_rowid(), tuples = tupleVal)
+                    rowid = rowid, tuples = tupleVal)
             self.__root = self._create_node(pt.TableLeaf, INVALID_OFF,
                     INVALID_OFF, [cell])
             self.__dirty.add('root_page')
@@ -179,6 +179,7 @@ class TableFile(PagingFile):
                     INVALID_OFF, [cell])
             n_ovf._reparent(newroot.pagenum)
             self.__root._reparent(newroot.pagenum)
+            self.__root = newroot
             self.__dirty.add('root_page')
 
 
