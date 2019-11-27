@@ -1,6 +1,6 @@
 import enum
 import struct
-from .base import FileFormatError
+from .base import FileFormatError, require_params
 from .valuetype import vpack1, vpack, vunpack, vunpack1_from, \
     check_type_compat
 
@@ -16,12 +16,6 @@ s_page_header = struct.Struct('>BxHHIIxx')
 s_page_offs = struct.Struct('>H')
 
 INVALID_OFF = 0xffffffff
-
-def require_params(params, *names):
-    for n in names:
-        if params.get(n, None) == None:
-            raise ValueError(f'Require parameter "{n}"')
-
 
 class DataCell(object):
     ''' Abstract superclass representing a data cell within a page block. This
@@ -234,7 +228,7 @@ class Page(object):
         packed into this page. It specifically accounts for both the offset
         bytes and the actual cell data '''
 
-        return len(self.pack_cell(c)) + 2 
+        return len(self.pack_cell(cell)) + 2 
 
     def get_free_size(self):
         ''' Obtains the amount of bytes left in this page that we can use to put
@@ -306,17 +300,21 @@ class PagingFile(object):
     ''' Represents a paginated B-tree like structure that lays out key and
     value pairs within a searchable paging system. '''
 
-    def __init__(self, filename, tuple_types, page_size = 512):
+    def __init__(self, file, tuple_types, page_size = 512):
         ''' Create paging DB file from a specific file. '''
-        self.__file = open(filename, 'rb+')
-        self.__filename = filename
+        if type(file) in (str, bytes):
+            file = open(file, 'rb+')
+        self.__file = file
         self.__page_size = page_size
         self.__tuple_types = tuple_types
 
     @property
-    def page_size(self):
-        return self.__page_size
-        
+    def file(self): return self.__file
+    @property
+    def page_size(self): return self.__page_size
+    @property
+    def tuple_types(self): return self.__tuple_types
+
     def next_page(self):
         sz = self.__file.seek(0, 2)
         return (sz + self.__page_size - 1) // self.__page_size

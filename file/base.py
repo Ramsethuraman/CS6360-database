@@ -1,5 +1,10 @@
 __all__ = ['FileFormatError', 'AbstractDBFile']
 
+def require_params(params, *names):
+    for n in names:
+        if params.get(n, None) == None:
+            raise ValueError(f'Require parameter "{n}"')
+
 class FileFormatError(Exception):
     pass
 
