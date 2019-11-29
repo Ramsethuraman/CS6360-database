@@ -278,6 +278,7 @@ class ValueType(enum.IntEnum):
     NULL, TINYINT, SMALLINT, INT, BIGINT, FLOAT, DOUBLE, _, YEAR, TIME, \
             DATETIME, DATE, TEXT = range(13)
 
+# TODO: check integer ranges
 __type_map = {
         ValueType.NULL:     (ValueType.NULL,     0, '',  None),
         ValueType.TINYINT:  (ValueType.TINYINT,  1, 'b', int),

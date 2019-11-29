@@ -29,13 +29,22 @@ data = ((933,   b'Rover',   Float32(20.6), 4),
         (1630,  b'Bubbles', Float32(7.1),  11),
         (1223,  b'Peanut',  Float32(14.3), 2))
 
+
 dbfile = TableFile(open('dogs.tbl', 'w+b'), types, 128, last_rowid = 0, 
         root_page = INVALID_OFF)
 for i in range(len(data)):
     dbfile.add(data[i])
+
+rms = [2,5,5,10,0,22,100,1,22,6,7]
+for rm in rms:
+    print(rm, dbfile.delete(rm))
     for j in range(dbfile.next_page()):
-        print(repr(dbfile.read_page(j)))
+        print(dbfile.read_page(j).display_short())
     input('************* Next... *****************')
 
 for rowid, tups in dbfile:
     print(rowid, tups)
+input('************* Next... *****************')
+
+for i in range(23):
+    print(i, dbfile.select(i))

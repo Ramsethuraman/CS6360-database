@@ -56,6 +56,9 @@ class IndexLeafCell(DataCell):
         if len(self.tuple_types) != 1:
             raise FileFormatError('Mismatch size of tuple length')
 
+    def __str__(self):
+        return repr(self.key) + ' ' + repr(self.rowids)
+
     def display(self, tablevel = 0):
         tb = '  ' * tablevel
         return f'{tb}IndexLeafCell {{\n' + \
@@ -91,6 +94,9 @@ class TableLeafCell(DataCell):
         require_params(kparams, 'rowid')
         super().__init__(*params, **kparams)
 
+    def __str__(self):
+        return str(self.rowid)
+
     def display(self, tablevel = 0):
         tb = '  ' * tablevel
         ret = f'{tb}TableLeafCell {{\n' + \
@@ -119,6 +125,9 @@ class IndexInteriorCell(IndexLeafCell):
         require_params(kparams, 'left_child')
         super().__init__(*params, **kparams)
 
+    def __str__(self):
+        return super().__str__() + f' [->{self.left_child}]'
+
     def display(self, tablevel = 0):
         tb = '  ' * tablevel
         return f'{tb}IndexInteriorCell {{\n' + \
@@ -135,6 +144,9 @@ class TableInteriorCell(DataCell):
     def __init__(self, *params, **kparams):
         require_params(kparams, 'left_child', 'rowid')
         super().__init__(*params, **kparams)
+
+    def __str__(self):
+        return f'{self.rowid} [->{self.left_child}]'
 
     def load_payload(self, payload):
         raise FileFormatError('No payload needed')
@@ -194,8 +206,8 @@ class Page(object):
         self.cur_pnum = pagenum
         self.type = ptype
         self.tuple_types = tuple_types
-        self.pnum_right = pnum_right
-        self.pnum_parent = pnum_parent
+        self.pnum_right = pnum_right & 0xffffffff
+        self.pnum_parent = pnum_parent & 0xffffffff
         self.cells = list(cells)
 
     def __str__(self):
@@ -226,12 +238,24 @@ class Page(object):
         ret += f'{tb}  ]\n{tb}}}'
         return ret
 
+    def display_short(self, tablevel = 0):
+        tb = '  ' * tablevel
+        cells = ', '.join(str(c) for c in self.cells)
+        return f'{tb}Page({self.cur_pnum}) {{{self.type.name}}} {{\n' + \
+                f'{tb}  [^{hex(self.pnum_parent)}] [>{hex(self.pnum_right)}]\n' + \
+                f'{tb} cells: [{cells}]\n{tb}}}'
+
+
     def get_cell_size(self, cell):
         ''' Computes the total amount of space this cell would take if it were
         packed into this page. It specifically accounts for both the offset
         bytes and the actual cell data '''
 
         return len(self.pack_cell(cell)) + 2 
+
+    def get_used_size(self):
+        ''' Obtains the amount of bytes used for cell data. '''
+        return sum(len(self.pack_cell(c)) for c in self.cells)
 
     def get_free_size(self):
         ''' Obtains the amount of bytes left in this page that we can use to put

@@ -1,6 +1,22 @@
 from .base import FileFormatError, require_params
-from .paging import create_cell, Page, PageTypes as pt, PagingFile, INVALID_OFF
+from .paging import create_cell, Page, PageTypes as pt, PagingFile, \
+        INVALID_OFF, TableInteriorCell
 from functools import lru_cache
+
+class TableInteriorRightCell(object):
+    __slots__ = ['__page']
+
+    def __init__(self, page):
+        self.__page = page
+
+    def _set_left_child(self, val):
+        self.__page.pnum_right = val
+    def _get_left_child(self):
+        return self.__page.pnum_right
+    left_child = property(_get_left_child, _set_left_child)
+
+    @property
+    def rowid(self): return INVALID_OFF
 
 class TableNode(object):
     def __init__(self, tbl, page):
@@ -10,11 +26,12 @@ class TableNode(object):
         self.__page = page
         self.__total = page.page_size - Page.get_page_header_size()
         self.__minfill = self.__total // 2
-        self.__minemp = self.__total - self.__minfill
+        self.__right = TableInteriorRightCell(page)
 
     @property
-    def pagenum(self):
-        return self.__page.cur_pnum
+    def page(self): return self.__page
+    @property
+    def pagenum(self): return self.__page.cur_pnum
 
     def add(self, tupleVal):
         ''' Adds a tuple value into this node. 
@@ -72,13 +89,128 @@ class TableNode(object):
 
         return rowid, n_ovf2.pagenum
 
-    def get_branch(self, rowid):
+    def delete(self, rowid):
         p = self.__page
-        for i in range(len(p.cells)):
-            if rowid <= p.cells[i].rowid:
-                return i
+        path = self.get_branch(rowid)
+        if path == -1:
+            return False
+#            return False, False
+
+        if p.type == pt.TableLeaf:
+            del p.cells[path] 
+            self.writeback()
+            return True
+#            return True, p.get_used_size() < self.__minfill
+
+        return self._delete_interior(path, rowid)
+
+    def _delete_interior(self, path, rowid):
+        cell = self.get_cell(path)
+        n_chld = self.__tbl._fetch_node(cell.left_child)
+        p_chld = n_chld.__page
+#        is_rm, is_udf = n.delete(rowid)
+
+        is_rm = n_chld.delete(rowid)
+
+        # Update pivot
+        if is_rm and path > 0:
+            self.get_cell(path - 1).rowid = n_chld.get_min_rowid()
+            self.writeback()
+
+        return is_rm
+        
+
+#    def _delete_interior(self, path, rowid)
+#        cell = self.get_cell(path)
+#        n_chld = self.__tbl._fetch_node(cell.left_child)
+#        p_chld = n_chld.__page
+#        is_rm, is_udf = n.delete(rowid)
+#
+#        # Update pivot
+#        if is_rm and path > 0:
+#            self.get_cell(path - 1).rowid = cell.get_min_rowid()
+#            dirty = True
+#
+#        if not is_udf:
+#            if dirty: self.writeback()
+#            return is_rm, False
+#            
+##        # If children are leaf nodes, delete
+##        if p_chld.type == pt.TableLeaf:
+#
+#        # Try borrowing a node if (a) it fits, (b) 
+#        if 
+#
+#        if is_udf and path < len(p.cells):
+#            sib = get_cell(path)
+#            n_sib = self.__tbl.fetch_node(sib.left_child)
+#
+#            p_sib = n_sib.__page
+#            p_chld = n.__page
+#
+#            if p_sib.get_used_size() <= p_chld.get_free_size():
+#                # Merge these two cells
+#                p_chld.cells += p_sib.cells
+#                if path + 1 == len(p.cells):
+#
+#                del p.cells[path]
+#                
+#
+#            take = p_sib.cells[0]
+#            if p_sib.get_cell_size(take) <= p_chld
+#
+#    def _steal(self, n_chld, n_sib):
+#        p_chld = n_chld.__page
+#        p_sib = n_sib.__page
+#
+#        # The case to merge all children
+#        if p_sib.get_used_size() <= p_chld.get_free_size():
+#
+#
+
+    def select(self, rowid):
+        cell = self.get_cell(self.get_branch(rowid))
+        if cell == None:
+            return None
+        if self.__page.type == pt.TableLeaf:
+            return cell.tuples
         else:
-            return len(p.cells)
+            return self.__tbl._fetch_node(cell.left_child).select(rowid)
+
+    def get_cell(self, ind):
+        ''' Obtains the cell at the index. If the index is len(cells), it will
+        return a special cell that can be used to get/set the right pointer.
+        '''
+
+        p = self.__page
+        if ind == len(p.cells) and p.type == pt.TableInterior:
+            return self.__right
+        elif ind < 0:
+            return None
+        else:
+            return p.cells[ind]
+
+    def get_branch(self, rowid):
+        ''' Obtains the index of the pointer/leaf cell that this rowid
+        value should fall under. 
+        
+        For leaf pages, it will return -1 if it doesn't find an exact rowid
+        match
+        '''
+
+        p = self.__page
+        if p.type == pt.TableLeaf:
+            for i in range(len(p.cells)):
+                if rowid == p.cells[i].rowid:
+                    return i
+            else:
+                return -1
+        else:
+            for i in range(len(p.cells)):
+                if rowid < p.cells[i].rowid:
+                    return i
+            else:
+                return len(p.cells)
 
     def get_min_rowid(self):
         p = self.__page
@@ -101,14 +233,19 @@ class TableNode(object):
         self.__page.pnum_parent = pnum_parent
         self.writeback()
 
+def to_signed(val):
+    if val >= 2**31:
+        val -= 2**32
+    return val
+
 class TableFile(PagingFile):
     # TODO: transactions if we have time
     def __init__(self, *args, **kargs):
         require_params(kargs, 'last_rowid', 'root_page')
 
         self.__dirty = set()
-        self.__lastrowid = kargs.pop('last_rowid')
-        root_page = kargs.pop('root_page')
+        self.__lastrowid = kargs.pop('last_rowid') & 0xffffffff
+        root_page = kargs.pop('root_page') & 0xffffffff
 
         super().__init__(*args, **kargs)
 
@@ -119,14 +256,28 @@ class TableFile(PagingFile):
             if root.pnum_parent != INVALID_OFF:
                 raise FileFormatError('Corrupted root page number')
 
-
     @property
-    def root_page(self):
-        return self.__root.cur_pnum
-
+    def root_page(self): return to_signed(self.__root.cur_pnum)
     @property
-    def last_rowid(self):
-        return self.__lastrowid
+    def last_rowid(self): return to_signed(self.__lastrowid)
+
+    def __iter__(self):
+        ''' This will return an iterator that iterates through all the tuple
+        values in this table in increasing monotonic order. Each element is
+        represented as a 2-tuple of rowid and tuple value'''
+
+        if self.__root == None:
+            return
+
+        n = self.__root
+        while n.page.type != pt.TableLeaf:
+            n = self._fetch_node(n.get_cell(0).left_child)
+        while True: 
+            for c in n.page.cells:
+                yield (c.rowid, c.tuples)
+            if n.page.pnum_right == INVALID_OFF:
+                break
+            n = self._fetch_node(n.page.pnum_right)
 
     def dirty_props(self):
         ''' Queries and clears any table properties that might be dirty after
@@ -182,11 +333,17 @@ class TableFile(PagingFile):
             self.__root = newroot
             self.__dirty.add('root_page')
 
-
-
         return rowid
 
+    def delete(self, rowid):
+        if self.__root == None:
+            return False
+        return self.__root.delete(rowid)
 
+    def select(self, rowid):
+        if self.__root == None:
+            return None
+        return self.__root.select(rowid)
 
 
 
