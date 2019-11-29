@@ -37,5 +37,5 @@ for i in range(len(data)):
         print(repr(dbfile.read_page(j)))
     input('************* Next... *****************')
 
-for rowid, tups in dbfile:
-    print(rowid, tups)
+for tups in dbfile:
+    print(tups)

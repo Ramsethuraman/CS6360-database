@@ -42,8 +42,8 @@ for rm in rms:
         print(dbfile.read_page(j).display_short())
     input('************* Next... *****************')
 
-for rowid, tups in dbfile:
-    print(rowid, tups)
+for tups in dbfile:
+    print(tups)
 input('************* Next... *****************')
 
 for i in range(23):

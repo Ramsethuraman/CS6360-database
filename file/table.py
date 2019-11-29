@@ -173,7 +173,7 @@ class TableNode(object):
         if cell == None:
             return None
         if self.__page.type == pt.TableLeaf:
-            return cell.tuples
+            return (rowid,) + cell.tuples
         else:
             return self.__tbl._fetch_node(cell.left_child).select(rowid)
 
@@ -274,7 +274,7 @@ class TableFile(PagingFile):
             n = self._fetch_node(n.get_cell(0).left_child)
         while True: 
             for c in n.page.cells:
-                yield (c.rowid, c.tuples)
+                yield (c.rowid,) + c.tuples
             if n.page.pnum_right == INVALID_OFF:
                 break
             n = self._fetch_node(n.page.pnum_right)
