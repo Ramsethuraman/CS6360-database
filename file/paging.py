@@ -50,9 +50,9 @@ class IndexLeafCell(DataCell):
     __slots__ = ['rowids', 'key']
     _head = struct.Struct('>0sH0s')
     def __init__(self, *params, **kparams):
-        super().__init__(*params **kparams)
         self.rowids = []
         self.key = b''
+        super().__init__(*params, **kparams)
         if len(self.tuple_types) != 1:
             raise FileFormatError('Mismatch size of tuple length')
 
@@ -63,7 +63,7 @@ class IndexLeafCell(DataCell):
         tb = '  ' * tablevel
         return f'{tb}IndexLeafCell {{\n' + \
                 f'{tb}  key: {repr(self.key)}\n' + \
-                f'{tb}  rowids: {repr(rowids)}\n' + \
+                f'{tb}  rowids: {repr(self.rowids)}\n' + \
                 f'{tb}}}'
 
     def load_payload(self, payload):
@@ -163,9 +163,9 @@ class TableInteriorCell(DataCell):
 
 _cells = {
         PageTypes.TableLeaf: TableLeafCell,
-        PageTypes.IndexLeaf: TableLeafCell,
+        PageTypes.IndexLeaf: IndexLeafCell,
         PageTypes.TableInterior: TableInteriorCell,
-        PageTypes.IndexInterior: TableInteriorCell,
+        PageTypes.IndexInterior: IndexInteriorCell,
     }
 
 def create_cell(ptype, *params, **kparams):

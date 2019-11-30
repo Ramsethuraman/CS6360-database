@@ -15,6 +15,7 @@ def compare(a, b, inequ):
         '<': lambda a, b: a < b,
         '<=': lambda a, b: a <= b,
         '=': lambda a, b: a == b,
+        '!=': lambda a, b: a != b,
         '>=': lambda a, b: a >= b,
         '>': lambda a, b: a > b
     }
@@ -30,9 +31,17 @@ def compare(a, b, inequ):
         except:
             raise DBError(f'Cannot compare {type(a)} with {type(b)}')
 
-def catch_errs(action, *args, **kwargs):
+def catch_err(action, *args, **kwargs):
     try:
         return action(*args, **kwargs)
+    except DBError:
+        raise
+    except Exception as exc:
+        raise DBError(type(exc).__name__ + ': ' + ' '.join(exc.args))
+
+def catch_err_itr(action, *args, **kwargs):
+    try:
+        yield from action(*args, **kwargs)
     except DBError:
         raise
     except Exception as exc:
@@ -76,6 +85,8 @@ class AbstractDBFile(object):
     def _parse_column(self, column):
         if type(column) is str:
             return self.find_colind_byname(column)
+        elif type(column) is bytes:
+            return self.find_colind_byname(str(column, 'utf8'))
         elif type(column) is int:
             return column
         else:
@@ -96,10 +107,10 @@ class AbstractDBFile(object):
         if project != None:
             project = [self._parse_column(col) for col in project]
         rs = catch_err(self._findall)
-        return catch_err(self._project, rs, project)
+        return catch_err_itr(self._project, rs, project)
         
     def _findall(self):
-        return list([list(a) for a in self.__data])
+        return map(list, self.__data)
 
     def select(self, column, value, cond='=', project=None):
         ''' Alias to find '''
@@ -112,23 +123,19 @@ class AbstractDBFile(object):
         if project != None:
             project = [self._parse_column(col) for col in project]
         rs = catch_err(self._find, self._parse_column(column), value, cond)
-        return catch_err(self._project, rs, project)
+        return catch_err_itr(self._project, rs, project)
 
     def _find(self, colind, value, cond):
         ''' Implementation-specific version of find. '''
-        rs = []
         for tup in self.__data:
             if tup[colind] == value:
-                rs.append(list(tup))
-        return rs
+                yield(list(tup))
 
     def _project(self, rs, colinds):
         if colinds == None:
-            return rs
-        rs2 = []
+            yield from rs
         for tup in rs:
-            rs2.append((tup[c] for c in colinds))
-        return rs2
+            yield (tup[c] for c in colinds)
                 
     def delete(self, column, value, cond='='):
         ''' Deletes all rows with a specific condition on column. Returns the
@@ -155,15 +162,27 @@ class AbstractDBFile(object):
             if tup[cond_colind] == cond_value:
                 changed += 1
                 tup[mod_colind] = new_value
+        return changed
 
-    def insert(self, tup):
-        ''' Inserts a tuple into the table'''
+    def insert(self, tup = None, **kwargs):
+        ''' Inserts a row into the table. The caller may either supply an entire
+        tuple, XOR a series of key=value pairs. '''
+
+        if (tup != None) == bool(kwargs):
+            raise DBError('Give either a full pair tuple or keyword arguments')
+        if tup == None:
+            tup = [None] * len(self.__columns)
+            for key, val in kwargs.items():
+                tup[self._parse_column(key)] = val
+        else:
+            if len(tup) != len(self.__columns):
+                raise DBError(f'Expected a tuple of length {len(self.__columns)}')
+
         catch_err(self._insert, tup)
 
     def _insert(self, tup):
         if len(tup) != len(self.__columns):
-            raise DBError('Expected a tuple of length ' +
-                    str(len(self.__columns)))
+            raise DBError(f'Expected a tuple of length {len(self.__columns)}')
         self.__data.append(list(tup))
             
 

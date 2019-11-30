@@ -418,7 +418,8 @@ def vunpack1_from(data, offset=0):
     data type and the typeid byte'''
 
     data2 = data[offset:]
-    return vunpack_from(data, offset)
+    tup, size = vunpack_from(b'\x01' + data2)
+    return tup[0], size - 1
 
 def vunpack1(data):
     ''' Unpacks one data point (without a header for number of columns).
