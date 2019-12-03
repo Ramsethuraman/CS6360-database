@@ -76,7 +76,8 @@ class IndexLeafCell(DataCell):
         if len(payload) != key_size + 1 + 4 * nids:
             raise FileFormatError('Invalid payload size')
 
-        self.rowids = set(struct.iter_unpack('>I', payload[key_size + 1:]))
+        self.rowids = set(x for x, in struct.iter_unpack('>I', 
+            payload[key_size + 1:]))
 
     def store_payload(self):
         nrows = len(self.rowids)

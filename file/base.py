@@ -69,7 +69,9 @@ class AbstractDBFile(object):
         if data == None and type(self) == AbstractDBFile:
             raise ValueError('Must give data for AbstractDBFile')
 
-        self.__data = data
+        if data:
+            self.__data = [list(tup) for tup in data]
+
         self.__columns = tuple(columns)
 
         colind_bynames = dict()
@@ -128,7 +130,7 @@ class AbstractDBFile(object):
     def _find(self, colind, value, cond):
         ''' Implementation-specific version of find. '''
         for tup in self.__data:
-            if tup[colind] == value:
+            if compare(tup[colind], value, cond):
                 yield(list(tup))
 
     def _project(self, rs, colinds):
@@ -140,13 +142,13 @@ class AbstractDBFile(object):
     def delete(self, column, value, cond='='):
         ''' Deletes all rows with a specific condition on column. Returns the
         number of rows that are deleted '''
-        return catch_err(self._delete, self._parse_column(column), value)
+        return catch_err(self._delete, self._parse_column(column), value, cond)
 
     def _delete(self, colind, value, cond):
         ''' Implementation-specific version of update. '''
         changed = 0
-        for tup in self.__data:
-            if tup[colind] == value:
+        for tup in list(self.__data):
+            if compare(tup[colind], value, cond):
                 changed += 1
                 self.__data.remove(tup)
         return changed
@@ -159,7 +161,7 @@ class AbstractDBFile(object):
     def _modify(self, mod_colind, new_value, cond_colind, cond_value, cond='='):
         changed = 0
         for tup in self.__data:
-            if tup[cond_colind] == cond_value:
+            if compare(tup[cond_colind], cond_value, cond):
                 changed += 1
                 tup[mod_colind] = new_value
         return changed
@@ -184,7 +186,6 @@ class AbstractDBFile(object):
         if len(tup) != len(self.__columns):
             raise DBError(f'Expected a tuple of length {len(self.__columns)}')
         self.__data.append(list(tup))
-            
 
     def drop(self):
         ''' Drops the table. Since this is just a RAM layout by default, this

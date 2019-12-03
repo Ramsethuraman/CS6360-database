@@ -168,14 +168,22 @@ class TableNode(object):
 #
 #
 
-    def select(self, rowid):
-        cell = self.get_cell(self.get_branch(rowid))
+    def _select_branch(self, rowid):
+        path = self.get_branch(rowid)
+        cell = self.get_cell(path)
         if cell == None:
-            return None
+            return None, None
         if self.__page.type == pt.TableLeaf:
-            return (rowid,) + cell.tuples
+            return self, path
         else:
-            return self.__tbl._fetch_node(cell.left_child).select(rowid)
+            return self.__tbl._fetch_node(cell.left_child)._select_branch(rowid)
+
+    def select(self, rowid):
+        n, path = self._select_branch(rowid)
+        if n == None:
+            return None
+        cell = n.get_cell(path)
+        return (rowid,) + cell.tuples
 
     def get_cell(self, ind):
         ''' Obtains the cell at the index. If the index is len(cells), it will
@@ -225,6 +233,22 @@ class TableNode(object):
             if len(p.cells) == 0:
                 raise FileFormatError('Leaf node has 0 cells')
             return p.cells[0].rowid
+
+    def modify(self, rowid, tupleVal):
+        ''' Edits a row to be the tuple value specified. Note that the tuple
+        does not contain the rowid value. This function will return the rowid of
+        the tuple value after being modified, or None if it is not found. The
+        rowid may change if the tuple value is too large, and it would have to
+        be reinserted. '''
+
+        tbl = self.__tbl
+        cell = self.get_cell(self._select_branch(rowid))
+        if n = None:
+            return None
+
+        if p.type == pt.TableInterior:
+            n = tbl._fetch_node(self.get_cell(path).left_child)
+            return n
 
     def writeback(self):
         self.__tbl.write_page(self.__page)
