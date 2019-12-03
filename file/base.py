@@ -37,7 +37,7 @@ def catch_err(action, *args, **kwargs):
     except DBError:
         raise
     except Exception as exc:
-        raise DBError(type(exc).__name__ + ': ' + ' '.join(exc.args))
+        raise DBError(type(exc).__name__ + ': ' + ' '.join(map(str, exc.args)))
 
 def catch_err_itr(action, *args, **kwargs):
     try:
@@ -45,7 +45,7 @@ def catch_err_itr(action, *args, **kwargs):
     except DBError:
         raise
     except Exception as exc:
-        raise DBError(type(exc).__name__ + ': ' + ' '.join(exc.args))
+        raise DBError(type(exc).__name__ + ': ' + ' '.join(map(str, exc.args)))
 
 
 class DBError(Exception):
@@ -178,13 +178,15 @@ class AbstractDBFile(object):
                 tup[self._parse_column(key)] = val
         else:
             if len(tup) != len(self.__columns):
-                raise DBError(f'Expected a tuple of length {len(self.__columns)}')
+                raise DBError('Expected a tuple of length '+
+                        f'{len(self.__columns)}, got length {len(tup)}')
 
         catch_err(self._insert, tup)
 
     def _insert(self, tup):
         if len(tup) != len(self.__columns):
-            raise DBError(f'Expected a tuple of length {len(self.__columns)}')
+            raise DBError('Expected a tuple of length '+
+                    f'{len(self.__columns)}, got length {len(tup)}')
         self.__data.append(list(tup))
 
     def drop(self):

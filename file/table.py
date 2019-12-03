@@ -183,7 +183,7 @@ class TableNode(object):
         if n == None:
             return None
         cell = n.get_cell(path)
-        return (rowid,) + cell.tuples
+        return [rowid] + cell.tuples
 
     def get_cell(self, ind):
         ''' Obtains the cell at the index. If the index is len(cells), it will
@@ -243,7 +243,7 @@ class TableNode(object):
 
         tbl = self.__tbl
         cell = self.get_cell(self._select_branch(rowid))
-        if n = None:
+        if n == None:
             return None
 
         if p.type == pt.TableInterior:
@@ -298,7 +298,7 @@ class TableFile(PagingFile):
             n = self._fetch_node(n.get_cell(0).left_child)
         while True: 
             for c in n.page.cells:
-                yield (c.rowid,) + c.tuples
+                yield [c.rowid] + c.tuples
             if n.page.pnum_right == INVALID_OFF:
                 break
             n = self._fetch_node(n.page.pnum_right)
