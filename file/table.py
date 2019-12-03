@@ -79,6 +79,7 @@ class TableNode(object):
         cells = [cell] if p.type == pt.TableLeaf else []
         n_ovf2 = tbl._create_node(p.type, p.pnum_right, p.pnum_parent, cells)
 
+        # TODO: make it degree 2 instead of 1 for interior
         if p.type == pt.TableInterior:
             # Update the parent of the overflow node's child
             n_ovf._reparent(n_ovf2.pagenum)
@@ -252,7 +253,7 @@ class TableNode(object):
             return n.modify(rowid, tupleVal)
         else:
             old = cell.tuples
-            old_size = self.__page.get_cell_size(old)
+            old_size = self.__page.get_cell_size(cell)
             cell.tuples = tupleVal
             if self.__page.get_free_size() >= 0:
                 # TODO: maybe cell coalition if underflow?
@@ -294,7 +295,7 @@ class TableFile(PagingFile):
                 raise FileFormatError('Corrupted root page number')
 
     @property
-    def root_page(self): return to_signed(self.__root.cur_pnum)
+    def root_page(self): return to_signed(self.__root.pagenum)
     @property
     def last_rowid(self): return to_signed(self.__lastrowid)
 
@@ -326,6 +327,7 @@ class TableFile(PagingFile):
         
         for d in dirty:
             ret[d] = getattr(self, d)
+        return ret
 
     @lru_cache(128)
     def _fetch_node(self, pagenum):

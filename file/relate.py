@@ -10,7 +10,7 @@ from .valuetype import ValueType as vt, parse_from_str, parse_from_int, \
 __all__ = ['RelationalDBFile', 'create_dbfile', 'drop_dbfile', 'get_dbfile',
         'get_meta_columns', 'get_meta_tables']
 
-path_base = './table'
+path_base = './table/'
 
 types = vt.__members__
 
@@ -100,6 +100,7 @@ def create_dbfile(table_name, columns):
     return RelationalDBFile((table_name, INVALID_OFF, 0), columns)
 
 # TODO: primary
+# TODO: refactor root finding function into paging
 class RelationalDBFile(AbstractDBFile):
     def __init__(self, table_specs, column_specs):
         ''' Creates a relational DB file from the specified table specs and
@@ -154,6 +155,12 @@ class RelationalDBFile(AbstractDBFile):
     def _table_file(self):
         return path_base + self.__name + '.tbl'
 
+    def _create_index(self, colind):
+        idx = None # TODO:
+        self.__idx[colind] = idx
+        # TODO: populate index
+
+
     def _get_index(self, colind, create_mem=True):
         idx = self.__idx[colind] 
 
@@ -175,9 +182,14 @@ class RelationalDBFile(AbstractDBFile):
         return idx
 
     def _update_dirty(self):
+        if dbfile_tables == None:
+            return
+        try:
+            dbfile_tables.select_one('table_name', self.__name)
+        except:
+            return
         for prop, val in self.__tbl.dirty_props().items():
-            dbfile_tables.modify(prop, val, 'table_name', 
-                    bytes(self.__name, 'utf8'))
+            dbfile_tables.modify(prop, val, 'table_name', self.__name)
 
     def _delete(self, colind, value, cond):
         if cond not in ('=', '!=', '<', '<=', '>', '>='):
@@ -237,23 +249,23 @@ class RelationalDBFile(AbstractDBFile):
     def _findall(self):
         yield from self.__tbl
 
-    def _check_constraint(ind, value):
+    def _check_constraint(self, ind, value):
         col = self.__cols[ind]
 
-        # Cast it if possible
-        col = DBColumn()
-        if col.dtype == vt.TEXT:
-            if type(value) is str:
-                value = bytes(value, 'utf8')
-        elif col.dtype is vt.FLOAT and type(value) == float:
-            value = Float32(value)
-        elif type(value) in (str, bytes):
-            value = parse_from_str(value)
-        elif type(value) is int:
-            value = parse_from_int(value)
+        if value != None:
+            # Cast it if possible
+            if col.dtype == vt.TEXT:
+                if type(value) is str:
+                    value = bytes(value, 'utf8')
+            elif col.dtype is vt.FLOAT and type(value) == float:
+                value = Float32(value)
+            elif type(value) in (str, bytes):
+                value = parse_from_str(col.dtype, value)
+            elif type(value) is int:
+                value = parse_from_int(col.dtype, value)
 
-        # Check for exact types at this point
-        vpack1(col.dtype, value)
+            # Check for exact types at this point
+            vpack1(col.dtype, value)
 
         # Check non-null constraints
         if not col.is_nullable and value == None:
@@ -297,18 +309,21 @@ class RelationalDBFile(AbstractDBFile):
             tup = list(self.__tbl.select(rowid))
             new_tup = list(tup)
             new_tup[mod_colind] = new_value
-            new_rowid = self.__tbl.modify(rowid, new_tup)
+            new_rowid = self.__tbl.modify(rowid, new_tup[1:])
 
-            if new_rowid != rowid:
-                # Delete from index, and re-insert
-                idx = self._get_index(mod_colind, False)
-                if idx != None:
-                    idx.delete(rowid, tup[mod_colind])
-                    idx.add(new_rowid, new_value)
+            if new_rowid == rowid:
+                continue
 
-                # Delete from respective indexes
-                for cind, idx in self._itr_loaded_index():
-                    idx.delete(rid, tup[cind])
+            # Update stuff
+            for cind, idx in self._itr_loaded_index():
+                if cind == mod_colind:
+                    # Delete from index, and re-insert
+                    idx = self._get_index(mod_colind, False)
+                    if idx != None:
+                        idx.delete(rowid, tup[mod_colind])
+                        idx.add(new_rowid, new_value)
+                else:
+                    idx.modify(rowid, new_rowid, tup[cind])
         
         return 0
 

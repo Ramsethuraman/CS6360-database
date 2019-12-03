@@ -5,7 +5,7 @@ columns = ['Tag_ID', 'Name', 'Weight', 'Age']
 column_specs = (('rowid',  "INT",      1, False, True),
                 ('Tag_ID', "SMALLINT", 2, False, True),
                 ('Name',   "TEXT",     3, False, False), 
-                ('Weight', "FLOAT",    4, False, False),
+                ('Weight', "FLOAT",    4, True, False),
                 ('Age',    "TINYINT",  5, False, False))
 
 data = ((933,   b'Rover',   Float32(20.6), 4),
@@ -16,6 +16,7 @@ data = ((933,   b'Rover',   Float32(20.6), 4),
         (3597,  b'Patch',   Float32(29.6), 9), 
         (202,   b'Prince',  Float32(16.6), 7), 
         (1630,  b'Bubbles', Float32(7.1),  11),
+        (1631,  b'Bbbsles', None,          11),
         (1223,  b'Peanut',  Float32(14.3), 2))
 
 def test_dbfile(dbfile, hasrowid=False):

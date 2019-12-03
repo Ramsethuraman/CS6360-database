@@ -2,7 +2,7 @@ import enum
 import struct
 from .base import FileFormatError, require_params
 from .valuetype import vpack1, vpack, vunpack, vunpack1_from, \
-    check_type_compat
+    check_type_compat, ValueType as vt, NULLVAL
 
 __all__ = ['PageTypes', 'Page', 'PagingFile', 'create_cell', 'INVALID_OFF']
 
@@ -115,7 +115,11 @@ class TableLeafCell(DataCell):
         self.tuples = tuples
 
     def store_payload(self):
-        return vpack(self.tuple_types, *self.tuples)
+        types = list(self.tuple_types)
+        for i in range(len(types)):
+            if self.tuples[i] == NULLVAL:
+                types[i] = vt.NULL
+        return vpack(types, *self.tuples)
 
 class IndexInteriorCell(IndexLeafCell):
     ''' This is a interior cell of an index b tree '''
@@ -171,22 +175,6 @@ _cells = {
 
 def create_cell(ptype, *params, **kparams):
     return _cells[ptype](*params, **kparams)
-
-def null(tup):
-    ret = []
-    for t in tup:
-        if t == b'':
-            t = None
-        ret.append(t)
-    return tuple(ret)
-
-def unnull(tup):
-    ret = []
-    for t in tup:
-        if t == None:
-            t = b''
-        ret.append(t)
-    return tuple(ret)
 
 
 class Page(object):
@@ -273,7 +261,7 @@ class Page(object):
 
         cell_type = _cells[self.type]
         head = cell_type._head
-        left_child, payload_size, rowid = null(head.unpack_from(buff, offset))
+        left_child, payload_size, rowid = head.unpack_from(buff, offset)
 
         if payload_size == 0:
             raise FileFormatError('Invalid payload size')
@@ -311,8 +299,7 @@ class Page(object):
         if payload:
             payload_size = len(payload)
 
-        return head.pack(*unnull([cell.left_child, payload_size, 
-            cell.rowid])) + payload
+        return head.pack(*[cell.left_child, payload_size, cell.rowid]) + payload
 
 def readn(file, size):
     read = data = file.read(size)

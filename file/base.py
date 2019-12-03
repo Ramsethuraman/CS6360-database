@@ -8,9 +8,11 @@ def require_params(params, *names):
 def compare(a, b, inequ):
     ''' Compares a and b using the inequality string given. Note that if the two
     values are not comparable, this will throw an error back to the user. '''
+    from .valuetype import NULLVAL
 
-    aa = a != None
-    bb = b != None
+
+    aa = a != NULLVAL
+    bb = b != NULLVAL
     opers = {
         '<': lambda a, b: a < b,
         '<=': lambda a, b: a <= b,
@@ -23,7 +25,7 @@ def compare(a, b, inequ):
     if inequ not in opers:
         return False
 
-    if aa != bb or a == None:
+    if aa != bb or a == NULLVAL:
         return opers[inequ](aa, bb)
     else:
         try:

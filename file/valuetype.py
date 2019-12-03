@@ -21,7 +21,8 @@ as needed (primitive or extended primitive)
 
 __all__ = ['Date', 'DateTime', 'Time', 'DBData', 'ValueType', 'Year',
         'check_type_compat', 'parse_from_int', 'parse_from_str', 'vpack',
-        'vpack1', 'vunpack', 'vunpack1', 'vunpack_from', 'vunpack1_from']
+        'vpack1', 'vunpack', 'vunpack1', 'vunpack_from', 'vunpack1_from', 
+        'NULLVAL']
 
 import enum
 import datetime
@@ -57,8 +58,8 @@ class DBData(object):
         to throwing an error '''
         raise FileFormatError(f'Cannot convert a string to a(n) {cls.__name__} value')
 
-    @staticmethod
-    def parse_int(intval):
+    @classmethod
+    def parse_int(cls, intval):
         raise FileFormatError(f'Cannot convert an integer to a(n) {cls.__name__} value')
 
     @classmethod
@@ -69,6 +70,8 @@ class DBData(object):
         raise NotImplementedError('Abstract method')
 
     def __eq__(self, other):
+        if not isinstance(other, DBData):
+            return False
         return self.encode() == other.encode()
 
     def __gt__(self, other):
@@ -76,6 +79,25 @@ class DBData(object):
 
     def __ge__(self, other):
         return self.encode() >= other.encode()
+
+NULLVAL = None
+class NullType(DBData):
+    @classmethod
+    def decode(cls, numb): return NULLVAL
+
+    def __init__(self):
+        if NULLVAL != None:
+            raise ValueError('Singleton instantiation')
+
+    def __str__(self): return 'NULL'
+    def __repr__(self): return 'NULL'
+
+    def __bool__(self): return False
+    def __gt__(self, other): return False
+    def __ge__(self, other): return False
+
+    def encode(self): return b''
+NULLVAL = NullType()
 
 class Float32(float, DBData):
     ''' Wraps around a float value so that a string representation of this will
@@ -280,7 +302,7 @@ class ValueType(enum.IntEnum):
 
 # TODO: check integer ranges
 __type_map = {
-        ValueType.NULL:     (ValueType.NULL,     0, '',  None),
+        ValueType.NULL:     (ValueType.NULL,     0, '0s',  NullType),
         ValueType.TINYINT:  (ValueType.TINYINT,  1, 'b', int),
         ValueType.SMALLINT: (ValueType.SMALLINT, 2, 'h', int),
         ValueType.INT:      (ValueType.INT,      4, 'i', int),
@@ -327,13 +349,9 @@ def vpack(typeids, *data):
         typeid, _, fmt, dtype = __type_map[typeid]
 
         # Check data-type of data
-        if typeid == ValueType.NULL:
-            if data != None:
-                raise FileFormatError('Data should be None for NULL type')
-        else:
-            if type(data) != dtype:
-                raise FileFormatError('Data is not proper type to ' + \
-                    f'marshall, got {type(data)}, expected {dtype}')
+        if type(data) != dtype:
+            raise FileFormatError('Data is not proper type to ' + \
+                f'marshall, got {type(data)}, expected {dtype}')
 
         # Marshall value if needed
         if isinstance(data, DBData):
@@ -388,9 +406,6 @@ def vunpack_from(data, offset=0, exact=False):
     dtypes = []
     for typeid in col_types:
         _, size, fmt, dtype = __type_map[typeid] # Should't cause error
-        if not fmt: 
-            dtype = None
-            fmt = '0s' # Make sure that we make a space
         full_fmt += fmt
         dtypes.append(dtype)
 
@@ -402,10 +417,8 @@ def vunpack_from(data, offset=0, exact=False):
 
     datas = list(struct.unpack_from(full_fmt, data, offset))
     for ind, data in enumerate(datas):
-        # Special case for NULL
         dtype = dtypes[ind]
-        if not dtype: data = None
-        elif dtype != type(data):
+        if dtype != type(data):
             data = dtype.decode(data)
         datas[ind] = data
 
@@ -464,7 +477,7 @@ def parse_from_int(typeid, intval):
     _, _, _, dtype = __type_map[typeid]
 
     if issubclass(dtype, DBData):
-        return dtype.parse_int(strval)
+        return dtype.parse_int(intval)
     else:
-        return dtype(strval)
+        return dtype(intval)
     

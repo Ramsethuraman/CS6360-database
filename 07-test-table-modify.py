@@ -3,7 +3,17 @@ from file.table import TableFile
 from file.paging import INVALID_OFF
 from file.valuetype import Float32
 
+from prettytable import PrettyTable
+
+def print_file(dbfile):
+    tbl = PrettyTable(['rowid', 'Tag ID', 'Name', 'Weight', 'Age'])
+    for tups in dbfile:
+        tbl.add_row(tups)
+    tbl.add_row((1, 124, 1234, 1234, None))
+    print(tbl)
+
 types = [vt.SMALLINT, vt.TEXT, vt.FLOAT, vt.TINYINT]
+
 
 #Tag ID     Name     Weight(kg)    Age (years)
 data = ((933,   b'Rover',   Float32(20.6), 4),
@@ -20,8 +30,9 @@ dbfile = TableFile(open('dogs.tbl', 'w+b'), types, 128, last_rowid = 0,
         root_page = INVALID_OFF)
 for i in range(len(data)):
     dbfile.add(data[i])
-for tups in dbfile:
-    print(tups)
+
+print_file(dbfile)
+
 
 dbfile.modify(2, (8321, b'Spot', Float32(10.8), 6))
 for j in range(dbfile.next_page()):
