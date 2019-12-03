@@ -6,6 +6,9 @@ from .paging import PagingFile, INVALID_OFF
 from .table import TableFile
 from .valuetype import ValueType
 
+__all__ = ['RelationalDBFile', 'create_dbfile', 'drop_dbfile', 'get_dbfile',
+        'get_meta_columns', 'get_meta_tables']
+
 path_base = './'
 
 types = ValueType.__members__
