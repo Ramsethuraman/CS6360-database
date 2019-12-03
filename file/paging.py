@@ -331,7 +331,10 @@ class PagingFile(object):
     def __init__(self, file, tuple_types, page_size = 512):
         ''' Create paging DB file from a specific file. '''
         if type(file) in (str, bytes):
-            file = open(file, 'rb+')
+            try:
+                file = open(file, 'rb+')
+            except:
+                file = open(file, 'xb+')
         self.__file = file
         self.__page_size = page_size
         self.__tuple_types = tuple_types

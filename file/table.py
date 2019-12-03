@@ -242,13 +242,26 @@ class TableNode(object):
         be reinserted. '''
 
         tbl = self.__tbl
-        cell = self.get_cell(self._select_branch(rowid))
+        n, path = self._select_branch(rowid)
         if n == None:
             return None
 
-        if p.type == pt.TableInterior:
-            n = tbl._fetch_node(self.get_cell(path).left_child)
-            return n
+        cell = n.get_cell(path)
+        if self.__page.type == pt.TableInterior:
+            n = tbl._fetch_node(cell.left_child)
+            return n.modify(rowid, tupleVal)
+        else:
+            old = cell.tuples
+            old_size = self.__page.get_cell_size(old)
+            cell.tuples = tupleVal
+            if self.__page.get_free_size() >= 0:
+                # TODO: maybe cell coalition if underflow?
+                self.writeback()
+                return True
+            else:
+                # Revert, as this would cause an overflow
+                cell.tuples = old
+                return False
 
     def writeback(self):
         self.__tbl.write_page(self.__page)
@@ -298,7 +311,7 @@ class TableFile(PagingFile):
             n = self._fetch_node(n.get_cell(0).left_child)
         while True: 
             for c in n.page.cells:
-                yield [c.rowid] + c.tuples
+                yield [c.rowid] + list(c.tuples)
             if n.page.pnum_right == INVALID_OFF:
                 break
             n = self._fetch_node(n.page.pnum_right)
@@ -368,6 +381,25 @@ class TableFile(PagingFile):
         if self.__root == None:
             return None
         return self.__root.select(rowid)
+
+    def modify(self, rowid, tupleVal):
+        ''' Modifies the rowid to have the new tupleVal. If the tupleVal would
+        cause an overflow in the page that it is in, this will remove the rowid
+        and insert a new row with that tupleVal. This will return the (possibly
+        new) rowid of the modified tuple, or None on failure'''
+
+        if self.__root == None:
+            return None
+        
+        ret = self.__root.modify(rowid, tupleVal)
+        if ret == None:
+            return None
+        elif ret == False:
+            if not self.delete(rowid):
+                return None
+            return self.add(tupleVal)
+        else:
+            return rowid
 
 
 
