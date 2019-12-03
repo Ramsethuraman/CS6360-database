@@ -343,6 +343,9 @@ class PagingFile(object):
     @property
     def tuple_types(self): return self.__tuple_types
 
+    def close(self):
+        self.__file.close()
+
     def next_page(self):
         sz = self.__file.seek(0, 2)
         return (sz + self.__page_size - 1) // self.__page_size

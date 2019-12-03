@@ -2,6 +2,7 @@ import os
 from sortedcontainers import SortedDict
 
 from .base import AbstractDBFile, FileFormatError, compare, DBError
+from .paging import PagingFile, INVALID_OFF
 from .table import TableFile
 from .valuetype import ValueType
 
@@ -10,14 +11,19 @@ path_base = './'
 types = ValueType.__members__
 
 class DBColumn(object):
-    def __init__(self, col_name, data_type, is_nullable, is_unique):
+    def __init__(self, col_name, data_type, pos, is_nullable, is_unique):
         if data_type not in types:
             raise FileFormatError(f'Invalid data type ({data_type}) ' + \
                     f'for column "{col_name}"')
         self.name = col_name
         self.dtype = types[data_type]
+        self.pos = pos
         self.is_nullable = bool(is_nullable)
         self.is_unique = bool(is_unique)
+
+    def to_specs(self):
+        return (self.name, self.dtype, pos, self.is_nullable, ordinal,
+                self.is_nullable, self.is_unique)
 
 class Key(object):
     def __init__(self, val): self.val = val
@@ -73,6 +79,101 @@ class MemoryIndex(object):
         s.remove(rowid)
         return True
 
+def _check_tbl_name(table_name):
+    for c in '/\\*.\n\r':
+        if c in table_name:
+            raise DBError(f'Please do not use {repr(c)} in the table name!')
+
+def create_dbfile(table_name, columns):
+    ''' Creates a table from table name, and a list of tuples of column specs, 
+    the positions/oridinals given here are ignored and will be automatically
+    assigned based on position of columns '''
+
+    _check_tbl_name(table_name)
+
+    if os.access(path_base + table_name + '.tbl', os.F_OK):
+        raise DBError(f'Table {table_name} already exists!')
+    return RelationalDBFile((table_name, INVALID_OFF, 0), columns)
+
+tables_cols = (("rowid",      'INT',  1, False, True), 
+               ('table_name', 'TEXT', 2, False, True),
+               ('root_page',  'INT',  3, False, False),
+               ('last_rowid', 'INT',  4, False, False))
+columns_cols = (('rowid',       'INT',  1, False, True), 
+                ('table_rowid', 'INT',  2, False, False),
+                ('column_name', 'TEXT', 3, False, False),
+                ('data_type',   'TEXT', 4, False, False),
+                ('ordinal_position', 'TINYINT', 5, False, False),
+                ('is_nullable', 'TEXT', 6, False, False), 
+                ('is_unique',   'TEXT', 7, False, False))
+
+dbfile_tables = None
+
+def _calc_root(fname, tuple_types):
+        root = 0
+        raw = PagingFile(fname, tuple_types)
+        while True:
+            p = raw.read_page(root)
+            if p.pnum_parent == INVALID_OFF:
+                break
+            root = p.pnum_parent
+
+def _meta_create_dbfile(table_name, columns):
+    ''' Create a meta database if does not exists, otherwise get database, with
+    hard coded column specs '''
+    fname = path_base + table_name + '.tbl'
+    if os.access(fname, os.F_OK):
+        # Only place needed to bypass Table and DBfile api since we need to
+        # bootstrap the root_page of this file
+        tuple_types = [tuple_types.append(types[col[2]]) for col in columns]
+        if dbfile_tables == None:
+            root = _calc_root(fname, tuple_types)
+            last_rowid = 0
+        else:
+            _, _, root, last_rowid = dbfile_tables.select_one('table_name',
+                    bytes(table_name, 'utf8'))
+        ret = RelationalDBFile((table_name, root, last_rowid), columns)
+    else
+        ret = RelationalDBFile((table_name, INVALID_OFF, 0), columns)
+    ret._meta = True
+
+
+dbfile_tables = _meta_create_dbfile('davisbase_tables', tables_cols)
+dbfile_tables = _meta_create_dbfile('davisbase_tables', tables_cols)
+dbfile_columns = _meta_create_dbfile('davisbase_columns', columns_cols)
+
+def get_meta_tables():
+    return dbfile_tables
+
+def get_meta_columns():
+    return dbfile_columns
+
+def get_dbfile(table_name):
+    if table_name == 'davisbase_tables':
+        return get_meta_tables()
+    elif table_name == 'davisbase_columns':
+        return get_meta_columns()
+
+    _check_tbl_name(table_name)
+    if not os.access(path_base + table_name + '.tbl', os.F_OK):
+        raise DBError(f'Table {table_name} does not exist!')
+
+    _, _, root, last_rowid = dbfile_tables.select_one('table_name',
+            bytes(table_name, 'utf8'))
+
+    col_specs = []
+    for _, _, col_name, data_type, pos, is_null, is_uniq in \
+            dbfile_columns.select('table_name', bytes(table_name, 'utf8')):
+        col_specs.append((str(col_name, 'utf8'), str(data_type, 'utf8'), 
+                ordinal_position, is_null != b'NO', is_unique != b'NO'))
+
+    return RelationalDBFile((table_name, root, last_rowid), col_specs)
+
+
+def drop_dbfile(table_name):
+    _check_tbl_name(table_name)
+    get_dbfile(table_name).drop()
+
 # TODO: primary
 class RelationalDBFile(AbstractDBFile):
     def __init__(self, table_specs, column_specs):
@@ -85,23 +186,28 @@ class RelationalDBFile(AbstractDBFile):
         (column_name, data_type, ordinal_position, is_nullable, is_unique)
         '''
 
+        if column_specs[0] != ('rowid', "INT", 1, False, True): 
+            raise DBError('First column of all tables MUST BE rowid')
+
         tbl_name, root_page, last_rowid = table_specs
 
         cols = [None] * len(column_specs)
         columns = []
         tuple_types = []
         for descr in column_specs: 
-            col_name, data_type, pos, is_nullable, is_unique = descr
+            pos = descr[2]
             if pos <= 0 or pos > len(cols) or cols[pos-1] != None:
                 raise FileFormatError('Invalid ordinal position for ' + \
                         f'column "{col_name}"')
-            cols[pos-1] = DBColumn(col_name, data_type, is_nullable, is_unique)
+            cols[pos-1] = DBColumn(*descr)
 
         for col in cols:
             columns.append(col.name)
             tuple_types.append(col.dtype)
 
         super().__init__(columns)
+
+        self._meta = False
 
         self.__name = tbl_name
 
@@ -111,6 +217,10 @@ class RelationalDBFile(AbstractDBFile):
         self.__tbl = TableFile(self._table_file(), self.__tuple_types,
                 last_rowid = last_rowid, root_page = root_page)
         self.__idx = [None] * len(cols)
+
+    @property
+    def meta(self):
+        return self._meta
 
     def _index_file(self, colind):
         return path_base + self.__name + '_' + self.__cols[colind].name + '.ndx'
@@ -139,6 +249,11 @@ class RelationalDBFile(AbstractDBFile):
             self.__idx[colind] = idx
         return idx
 
+    def _update_dirty(self):
+        for prop, val in self.__tbl.dirty_props().items():
+            dbfile_tables.modify(prop, val, 'table_name', 
+                    bytes(self.__name, 'utf8'))
+
     def _delete(self, colind, value, cond):
         if cond not in ('=', '!=', '<', '<=', '>', '>='):
             return 0
@@ -156,11 +271,13 @@ class RelationalDBFile(AbstractDBFile):
 
             deleted += 1
 
-        #TODO: update meta tables
-
+        self._update_dirty()
         return deleted
 
     def _drop(self):
+        if self.meta:
+            raise DBError('Cannot drop meta tables')
+
         # Delete table
         try:
             os.remove(self._table_file())
@@ -174,7 +291,11 @@ class RelationalDBFile(AbstractDBFile):
             except:
                 pass
 
-        # TODO: update meta tables
+        # Update metadata
+        name = bytes(self.__name, 'utf8')
+        tblid, = dbfile_tables.select_one('table_name', name, ['rowid'])
+        dbfile_columns.delete('table_rowid', tblid)
+        dbfile_tables.delete('table', name)
 
     def _itr_loaded_index(self):
         for cind in range(len(self.__cols)):
@@ -220,6 +341,9 @@ class RelationalDBFile(AbstractDBFile):
         # Add to loaded indicies
         for cind, idx in self._itr_loaded_index():
             idx.add(tup[0], tup[cind])
+
+        # Update metadata
+        self._update_dirty()
 
     def _modify(self, mod_colind, new_value, cond_colind, cond_value, cond='='):
         # TODO:

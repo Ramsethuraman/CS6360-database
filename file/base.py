@@ -117,6 +117,16 @@ class AbstractDBFile(object):
     def select(self, column, value, cond='=', project=None):
         ''' Alias to find '''
         return self.find(column, value, cond, project)
+
+    def select_one(self, column, value, cond='=', project=None):
+        ''' Select one item '''
+        rs = catch_err(self.find, column, value, cond, project)
+        try:
+            return next(rs)
+        except:
+            pass
+
+        raise DBError(f'Could not find row where {column} {cond} {value}')
     
     def find(self, column, value, cond='=', project=None):
         ''' Searches the DBFile by column name or column index. Returns a list
