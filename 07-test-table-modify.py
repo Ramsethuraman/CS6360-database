@@ -1,7 +1,7 @@
 from file import *
 from file.table import TableFile
 from file.paging import INVALID_OFF
-from file.valuetype import Float32
+from file.valuetype import Float32, NULLVAL
 
 from prettytable import PrettyTable
 
@@ -9,7 +9,7 @@ def print_file(dbfile):
     tbl = PrettyTable(['rowid', 'Tag ID', 'Name', 'Weight', 'Age'])
     for tups in dbfile:
         tbl.add_row(tups)
-    tbl.add_row((1, 124, 1234, 1234, None))
+    tbl.add_row((1, 124, 1234, 1234, NULLVAL))
     print(tbl)
 
 types = [vt.SMALLINT, vt.TEXT, vt.FLOAT, vt.TINYINT]

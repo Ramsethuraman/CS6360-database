@@ -91,6 +91,7 @@ class NullType(DBData):
 
     def __str__(self): return 'NULL'
     def __repr__(self): return 'NULL'
+    def __hash__(self): return 0
 
     def __bool__(self): return False
     def __gt__(self, other): return False

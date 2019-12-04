@@ -16,7 +16,7 @@ data = ((933,   b'Rover',   Float32(20.6), 4),
         (3597,  b'Patch',   Float32(29.6), 9), 
         (202,   b'Prince',  Float32(16.6), 7), 
         (1630,  b'Bubbles', Float32(7.1),  11),
-        (1631,  b'Bbbsles', None,          11),
+        (1631,  b'Bbbsles', NULLVAL,       11),
         (1223,  b'Peanut',  Float32(14.3), 2))
 
 def test_dbfile(dbfile, hasrowid=False):

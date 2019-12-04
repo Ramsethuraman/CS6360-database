@@ -184,7 +184,7 @@ class TableNode(object):
         if n == None:
             return None
         cell = n.get_cell(path)
-        return [rowid] + cell.tuples
+        return [rowid] + list(cell.tuples)
 
     def get_cell(self, ind):
         ''' Obtains the cell at the index. If the index is len(cells), it will
@@ -249,6 +249,7 @@ class TableNode(object):
 
         cell = n.get_cell(path)
         if self.__page.type == pt.TableInterior:
+            print(type(cell), cell.left_child, cell)
             n = tbl._fetch_node(cell.left_child)
             return n.modify(rowid, tupleVal)
         else:

@@ -5,7 +5,7 @@ from .base import AbstractDBFile, FileFormatError, compare, DBError
 from .paging import PagingFile, INVALID_OFF
 from .table import TableFile
 from .valuetype import ValueType as vt, parse_from_str, parse_from_int, \
-        vpack1, Float32
+        vpack1, Float32, NULLVAL
 
 __all__ = ['RelationalDBFile', 'create_dbfile', 'drop_dbfile', 'get_dbfile',
         'get_meta_columns', 'get_meta_tables']
@@ -252,7 +252,7 @@ class RelationalDBFile(AbstractDBFile):
     def _check_constraint(self, ind, value):
         col = self.__cols[ind]
 
-        if value != None:
+        if value != NULLVAL:
             # Cast it if possible
             if col.dtype == vt.TEXT:
                 if type(value) is str:

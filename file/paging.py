@@ -176,6 +176,21 @@ _cells = {
 def create_cell(ptype, *params, **kparams):
     return _cells[ptype](*params, **kparams)
 
+def null(tup):
+    ret = []
+    for t in tup:
+        if t == b'':
+            t = None
+        ret.append(t)
+    return tuple(ret)
+
+def unnull(tup):
+    ret = []
+    for t in tup:
+        if t == None:
+            t = b''
+        ret.append(t)
+    return tuple(ret)
 
 class Page(object):
     ''' This is a page object that represents a page within an index or table
@@ -261,7 +276,7 @@ class Page(object):
 
         cell_type = _cells[self.type]
         head = cell_type._head
-        left_child, payload_size, rowid = head.unpack_from(buff, offset)
+        left_child, payload_size, rowid = null(head.unpack_from(buff, offset))
 
         if payload_size == 0:
             raise FileFormatError('Invalid payload size')
@@ -299,7 +314,8 @@ class Page(object):
         if payload:
             payload_size = len(payload)
 
-        return head.pack(*[cell.left_child, payload_size, cell.rowid]) + payload
+        return head.pack(*unnull([cell.left_child, payload_size, 
+            cell.rowid])) + payload
 
 def readn(file, size):
     read = data = file.read(size)
