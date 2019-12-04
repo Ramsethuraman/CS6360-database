@@ -150,7 +150,7 @@ class RelationalDBFile(AbstractDBFile):
         return self._meta
 
     def _index_file(self, colind):
-        return path_base + self.__name + '_' + self.__cols[colind].name + '.ndx'
+        return path_base + self.__name + '.' + self.__cols[colind].name + '.ndx'
 
     def _table_file(self):
         return path_base + self.__name + '.tbl'
@@ -375,6 +375,7 @@ def _meta_create_dbfile(table_name, columns):
     else:
         ret = RelationalDBFile((table_name, INVALID_OFF, 0), columns)
     ret._meta = True
+    return ret
 
 
 dbfile_tables = _meta_create_dbfile('davisbase_tables', tables_cols)
