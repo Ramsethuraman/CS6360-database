@@ -311,31 +311,28 @@ SELECT <column_set>|* FROM table_name [WHERE <column> <cond> <value>]
 
     <cond> can be of the following: <, <=, =, !=, >=, >
         '''
-        command = args.lower().strip(';')
-        split_command = command.split(dc.FROM_KEYWORD.lower())
-        if len(split_command) == 1:
-            self.print_error('Expected ' + dc.FROM_KEYWORD + ' keyword')
-            return
-        column_list = split_command[0].strip()
-        if len(column_list) == 0:
-            self.print_error('No column names specified')
-            return
-        column_list = column_list.split(',')
-        column_list = [x.strip() for x in column_list]
+        tkn = Tokenizer(args.strip())
+        column_list = []
 
-        rest_of_command = split_command[1].strip()
-        rest_of_command = rest_of_command.split(dc.WHERE_KEYWORD.lower())
-        where_clause = ''
-        if len(rest_of_command) > 1:
-            #Where clause specified
-            where_clause = rest_of_command[1].strip()
-            if not where_clause:
-                self.print_error('No where clause specified')
-        table_name = rest_of_command[0].strip()
-        if len(table_name) == 0:
-            self.print_error('No table name specified')
-            return
-        select_query_handler(column_list, table_name, where_clause)
+        if tkn.expect(tt.IDENT, tt.STAR) == tt.STAR:
+            tkn.expect_ident(dc.FROM_KEYWORD.lower())
+            column_list.append('*')
+        else:
+            column_list.append(tkn.lval)
+            while tkn.expect(tt.COMMA, tt.IDENT) == tt.COMMA:
+                column_list.append(tkn.expect(tt.IDENT))
+            tkn.expect_cur_ident(dc.FROM_KEYWORD.lower())
+
+        tkn.expect(tt.IDENT)
+        tbl_name = tkn.lval
+
+        if tkn.expect(tt.IDENT, tt.EOF) == tt.IDENT:
+            tkn.expect_cur_ident(dc.WHERE_KEYWORD.lower())
+            where_clause = tkn.rest()
+        else:
+            where_clause = ''
+
+        select_query_handler(column_list, tbl_name, where_clause)
 
     def cmdloop_with_keyboard_interrupt(self):
         try:

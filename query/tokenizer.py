@@ -4,7 +4,7 @@ from file import DBError
 import string
 
 class TokenType(Enum):
-    EOF, COMMA, LP, RP, TEXT, INT, FLOAT, IDENT, OPER = range(9)
+    EOF, COMMA, LP, RP, TEXT, INT, FLOAT, IDENT, OPER, STAR = range(10)
 
 tt = TokenType
 
@@ -27,6 +27,13 @@ class Tokenizer(object):
             raise DBError(f'Expected: {names}; but got {real.name} instead.')
         return real
 
+    def expect_cur_ident(self, *idents):
+        names = ', '.join(f'`{x}`' for x in idents)
+        idents2 = [s.lower() for s in idents]
+        if self.__val.lower() not in idents2:
+            raise DBError(f'Expected: ident(s) {names}; but got `{self.__val}`.')
+        return idents2.index(self.__val.lower())
+
     def expect_ident(self, *idents):
         names = ', '.join(f'`{x}`' for x in idents)
         real = self.next_token()
@@ -48,6 +55,9 @@ class Tokenizer(object):
             elif c in string.ascii_letters + '_' + '$':
                 self.__val = self._parse_greedy(_identpart)
                 return tt.IDENT
+            elif c == '*':
+                self.__pos += 1
+                return tt.STAR
             elif c == ',':
                 self.__pos += 1
                 return tt.COMMA
@@ -106,6 +116,9 @@ class Tokenizer(object):
                 raise DBError(f'Unexpected character `{c}`')
 
         return tt.EOF
+
+    def rest(self):
+        return self.__text[self.__pos:]
 
     def assert_end(self):
         if self.next_token() != tt.EOF:

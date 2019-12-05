@@ -80,6 +80,9 @@ class DBData(object):
     def __ge__(self, other):
         return self.encode() >= other.encode()
 
+    def __hash__(self):
+        return hash(self.encode())
+
 NULLVAL = None
 class NullType(DBData):
     @classmethod

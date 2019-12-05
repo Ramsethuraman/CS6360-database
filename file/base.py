@@ -191,11 +191,12 @@ class AbstractDBFile(object):
     def insert(self, val = None):
         ''' Inserts a row into the table. The caller may either supply an entire
         tuple, or a dict mapping '''
+        from .valuetype import NULLVAL
 
         if val == None:
             raise ValueError('Invalid argument to insert')
         elif type(val) is dict:
-            tup = [None] * len(self.__columns)
+            tup = [NULLVAL] * len(self.__columns)
             for key, val in val.items():
                 tup[self._parse_column(key)] = val
         elif type(val) in (list, tuple):
