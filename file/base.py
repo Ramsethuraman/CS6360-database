@@ -193,7 +193,7 @@ class AbstractDBFile(object):
                 raise DBError('Expected a tuple of length '+
                         f'{len(self.__columns)}, got length {len(tup)}')
 
-        catch_err(self._insert, tup)
+        return catch_err(self._insert, tup)
 
     def _insert(self, tup):
         if len(tup) != len(self.__columns):

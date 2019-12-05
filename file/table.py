@@ -249,7 +249,6 @@ class TableNode(object):
 
         cell = n.get_cell(path)
         if self.__page.type == pt.TableInterior:
-            print(type(cell), cell.left_child, cell)
             n = tbl._fetch_node(cell.left_child)
             return n.modify(rowid, tupleVal)
         else:
@@ -292,7 +291,7 @@ class TableFile(PagingFile):
             self.__root = None
         else:
             self.__root = root = self._fetch_node(root_page)
-            if root.pnum_parent != INVALID_OFF:
+            if root.page.pnum_parent != INVALID_OFF:
                 raise FileFormatError('Corrupted root page number')
 
     @property

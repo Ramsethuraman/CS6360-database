@@ -243,7 +243,6 @@ class DateTime(DBData):
         else:
             if millis != None:
                 millis *= 1000
-            print(year, month, day, hour, minute, second, millis)
             self.__time = datetime.datetime(year, month, day, hour, minute,
                     second, millis)
 

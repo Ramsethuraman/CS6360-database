@@ -349,6 +349,19 @@ class PagingFile(object):
     @property
     def tuple_types(self): return self.__tuple_types
 
+    def calc_root(self):
+        root = 0
+        if self.next_page() == 0:
+            return INVALID_OFF
+
+        while True:
+            p = self.read_page(root)
+            if p.pnum_parent == INVALID_OFF:
+                break
+            root = p.pnum_parent
+
+        return root
+
     def close(self):
         self.__file.close()
 

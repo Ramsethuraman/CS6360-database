@@ -14,6 +14,18 @@ path_base = './table/'
 
 types = vt.__members__
 
+tables_cols = (('rowid',      'INT',  1, False, True), 
+               ('table_name', 'TEXT', 2, False, True),
+               ('root_page',  'INT',  3, False, False),
+               ('last_rowid', 'INT',  4, False, False))
+columns_cols = (('rowid',       'INT',  1, False, True), 
+                ('table_rowid', 'INT',  2, False, False),
+                ('column_name', 'TEXT', 3, False, False),
+                ('data_type',   'TEXT', 4, False, False),
+                ('ordinal_position', 'TINYINT', 5, False, False),
+                ('is_nullable', 'TEXT', 6, False, False), 
+                ('is_unique',   'TEXT', 7, False, False))
+
 class DBColumn(object):
     def __init__(self, col_name, data_type, pos, is_nullable, is_unique):
         if data_type not in types:
@@ -125,7 +137,6 @@ class RelationalDBFile(AbstractDBFile):
             cols[pos-1] = DBColumn(*descr)
 
         if cols[0].to_specs() != ('rowid', "INT", 1, False, True): 
-            print(cols[0].to_specs())
             raise DBError('First column of all tables MUST BE rowid')
 
         for col in cols:
@@ -187,7 +198,7 @@ class RelationalDBFile(AbstractDBFile):
         try:
             dbfile_tables.select_one('table_name', self.__name)
         except:
-            return
+            print('WARNING: table name not set when update dirty!')
         for prop, val in self.__tbl.dirty_props().items():
             dbfile_tables.modify(prop, val, 'table_name', self.__name)
 
@@ -243,29 +254,34 @@ class RelationalDBFile(AbstractDBFile):
     def _find(self, colind, value, cond):
         if cond not in ('=', '!=', '<', '<=', '>', '>='):
             return
+        value = self._typecast(self.__cols[colind].dtype, value)
         for rowid in self._get_index(colind).search(value, cond):
             yield self.__tbl.select(rowid)
 
     def _findall(self):
         yield from self.__tbl
 
-    def _check_constraint(self, ind, value):
-        col = self.__cols[ind]
-
+    def _typecast(self, dtype, value):
         if value != NULLVAL:
             # Cast it if possible
-            if col.dtype == vt.TEXT:
+            if dtype == vt.TEXT:
                 if type(value) is str:
                     value = bytes(value, 'utf8')
-            elif col.dtype is vt.FLOAT and type(value) == float:
+            elif dtype is vt.FLOAT and type(value) == float:
                 value = Float32(value)
             elif type(value) in (str, bytes):
-                value = parse_from_str(col.dtype, value)
+                value = parse_from_str(dtype, value)
             elif type(value) is int:
-                value = parse_from_int(col.dtype, value)
+                value = parse_from_int(dtype, value)
 
             # Check for exact types at this point
-            vpack1(col.dtype, value)
+            vpack1(dtype, value)
+        return value
+
+
+    def _check_constraint(self, ind, value):
+        col = self.__cols[ind]
+        value = self._typecast(col.dtype, value)
 
         # Check non-null constraints
         if not col.is_nullable and value == None:
@@ -303,7 +319,10 @@ class RelationalDBFile(AbstractDBFile):
         # Update metadata
         self._update_dirty()
 
+        return rowid
+
     def _modify(self, mod_colind, new_value, cond_colind, cond_value, cond='='):
+        cond_value = self._typecast(self.__cols[cond_colind].dtype, cond_value)
         new_value = self._check_constraint(mod_colind, new_value)
         for rowid in self._get_index(cond_colind).search(cond_value, cond):
             tup = list(self.__tbl.select(rowid))
@@ -327,60 +346,60 @@ class RelationalDBFile(AbstractDBFile):
         
         return 0
 
-tables_cols = (('rowid',      'INT',  1, False, True), 
-               ('table_name', 'TEXT', 2, False, True),
-               ('root_page',  'INT',  3, False, False),
-               ('last_rowid', 'INT',  4, False, False))
-columns_cols = (('rowid',       'INT',  1, False, True), 
-                ('table_rowid', 'INT',  2, False, False),
-                ('column_name', 'TEXT', 3, False, False),
-                ('data_type',   'TEXT', 4, False, False),
-                ('ordinal_position', 'TINYINT', 5, False, False),
-                ('is_nullable', 'TEXT', 6, False, False), 
-                ('is_unique',   'TEXT', 7, False, False))
-
 dbfile_tables = None
-
-def _calc_root(fname, tuple_types):
-    root = 0
-    raw = PagingFile(fname, tuple_types)
-    if raw.next_page() == 0:
-        return INVALID_OFF
-
-    while True:
-        p = raw.read_page(root)
-        if p.pnum_parent == INVALID_OFF:
-            break
-        root = p.pnum_parent
 
 def _meta_create_dbfile(table_name, columns):
     ''' Create a meta database if does not exists, otherwise get database, with
     hard coded column specs '''
     fname = path_base + table_name + '.tbl'
+
+    root = INVALID_OFF
+    last_rowid = 0
     if os.access(fname, os.F_OK):
         # Only place needed to bypass Table and DBfile api since we need to
         # bootstrap the root_page of this file
         tuple_types = [types[col[1]] for col in columns]
         if dbfile_tables == None:
-            root = _calc_root(fname, tuple_types)
-            last_rowid = 0
+            pager = PagingFile(fname, tuple_types[1:])
+            root = pager.calc_root()
+            pager.close()
         else:
             try:
                 _, _, root, last_rowid = dbfile_tables.select_one('table_name',
                         bytes(table_name, 'utf8'))
             except:
-                root = INVALID_OFF
-                last_rowid = 0
-        ret = RelationalDBFile((table_name, root, last_rowid), columns)
-    else:
-        ret = RelationalDBFile((table_name, INVALID_OFF, 0), columns)
+                pass
+
+    ret = RelationalDBFile((table_name, root, last_rowid), columns)
     ret._meta = True
     return ret
 
+def _yesno(boolval):
+    return ['NO', 'YES'][bool(boolval)]
 
+def _init_meta():
+    startup = [['davisbase_tables', tables_cols], 
+            ['davisbase_columns', columns_cols]]
+
+    # Add tables first
+    for tbl_spec in startup:
+        tbl_spec.append(dbfile_tables.insert((None, tbl_spec[0], -1, 0)))
+
+    # Then add the columns
+    for _, cols, tbl_rowid in startup:
+        for col in cols:
+            col = [None, tbl_rowid] + list(col)
+            col[5] = _yesno(col[5])
+            col[6] = _yesno(col[6])
+            dbfile_columns.insert(col)
+
+# TODO: refactor these string constants
 dbfile_tables = _meta_create_dbfile('davisbase_tables', tables_cols)
 dbfile_tables = _meta_create_dbfile('davisbase_tables', tables_cols)
 dbfile_columns = _meta_create_dbfile('davisbase_columns', columns_cols)
+
+if next(dbfile_tables.find('table_name', 'davisbase_tables'), None) == None:
+    _init_meta()
 
 def get_meta_tables():
     return dbfile_tables
