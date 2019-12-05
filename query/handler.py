@@ -58,7 +58,8 @@ def drop_tables_query_handler(table_name):
     drop_dbfile(table_name)
 
 def show_tables_query_handler():
-    get_meta_tables().print_table()
+    tbls = get_meta_tables()
+    tbls.print_table(tbls.findall(project=['table_name']), ['table_name'])
 
 def create_table_query_handler(table_name, column_list):
     SYN_ERROR = 'Syntax error: CREATE TABLE <TABLE_NAME> (<COLUMN_NAME> <DATA_TYPE> <NOT_NULL> <UNIQUE>,...)'

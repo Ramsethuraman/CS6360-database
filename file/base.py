@@ -1,6 +1,6 @@
 from prettytable import PrettyTable
 
-__all__ = ['FileFormatError', 'AbstractDBFile']
+__all__ = ['FileFormatError', 'AbstractDBFile', 'DBError']
 
 def require_params(params, *names):
     for n in names:
@@ -151,7 +151,7 @@ class AbstractDBFile(object):
         if colinds == None:
             yield from rs
         for tup in rs:
-            yield (tup[c] for c in colinds)
+            yield list(tup[c] for c in colinds)
                 
     def delete(self, column, value, cond='='):
         ''' Deletes all rows with a specific condition on column. Returns the
