@@ -190,7 +190,7 @@ class AbstractDBFile(object):
             tup = [None] * len(self.__columns)
             for key, val in val.items():
                 tup[self._parse_column(key)] = val
-        elif type(tup) in (list, tuple):
+        elif type(val) in (list, tuple):
             if len(val) != len(self.__columns):
                 raise DBError('Expected a tuple of length '+
                         f'{len(self.__columns)}, got length {len(tup)}')

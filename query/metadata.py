@@ -37,8 +37,11 @@ def get_column_specs(table_id):
     return col_specs
 
 # TODO: refactor these string constants
-def meta_initialize():
+def meta_initialize1():
     tbl_tables = _meta_create_dbfile('davisbase_tables', tables_cols)
+    return tbl_tables
+
+def meta_initialize2():
     tbl_tables = _meta_create_dbfile('davisbase_tables', tables_cols)
     tbl_columns = _meta_create_dbfile('davisbase_columns', columns_cols)
 

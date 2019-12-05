@@ -7,8 +7,6 @@ from .table import TableFile
 from .valuetype import ValueType as vt, parse_from_str, parse_from_int, \
         vpack1, Float32, NULLVAL
 
-
-
 __all__ = ['RelationalDBFile', 'create_dbfile', 'drop_dbfile', 'get_dbfile',
         'get_meta_columns', 'get_meta_tables']
 
@@ -75,6 +73,16 @@ class MemoryIndex(object):
             }
             for k in self.__idx.irange(**opers[inequality]):
                 yield from self.__idx[k]
+
+    def modify(self, old_rowid, new_rowid, key):
+        if key not in self.__idx:
+            return False
+        s = self.__idx[key]
+        if rowid not in s:
+            return False
+        s.remove(old_rowid)
+        s.add(new_rowid)
+        return True
 
     def delete(self, rowid, key):
         if key not in self.__idx:
@@ -370,7 +378,8 @@ def _doinit():
     from query import metadata
     _init = True
     _meta = metadata
-    dbfile_tables, dbfile_columns = _meta.meta_initialize()
+    dbfile_tables = _meta.meta_initialize1()
+    dbfile_tables, dbfile_columns = _meta.meta_initialize2()
     _tbls[dbfile_tables.name] = dbfile_tables
     _tbls[dbfile_columns.name] = dbfile_columns
     dbfile_tables._update_dirty()

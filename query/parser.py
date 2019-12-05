@@ -125,7 +125,7 @@ class DatabaseREPL(cmd.Cmd):
             column_list = []
             tkn.expect(tt.LP)
             while True:
-                ttype = tkn.expect(tt.LP, tt.IDENT, tt.COMMA)
+                ttype = tkn.expect(tt.RP, tt.IDENT, tt.COMMA)
                 if ttype == tt.IDENT:
                     cur_col.append(tkn.lval)
                 elif ttype == tt.RP:
@@ -133,7 +133,7 @@ class DatabaseREPL(cmd.Cmd):
                         print_error('Empty column specifier')
                         return
                     break
-            wrap_error(create_table_query_handler, table_name, column_list)
+            wrap_error(create_table_query_handler, tbl_name, column_list)
 
     def do_drop(self, args):
         command = args.lower().strip().strip(';')
