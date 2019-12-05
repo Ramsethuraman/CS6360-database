@@ -35,46 +35,49 @@ class IndexNode(object):
         ovfkey = None
         ovfl = None
         ovfr = None
+        found = False
         intAdd = 0
         if p.type == pt.IndexInterior:
-            print("Interior Insert")
+            print(str(self.pagenum) + " Interior Insert")
             #iterate over children to see where to add
-            found = False
 
             for icell in cells:
-                intAdd = intAdd + 1
                 if key == icell.key:
+                    print("\tKey Found")
+
                     found = True
                     size = p.get_cell_size(icell)
-                    icell.rowids.append(rowid)
-                    if p.get_free_size()-size >= p.get_cell_size(test):
-                        print()
+                    icell.rowids.add(rowid)
                     #icell.
                     #add to cell and handle checks
                     break
                 elif key < icell.key:
+                    print("\tKey Not Found, But Valid Spot Found")
                     found = True
                     n = ind._fetch_node(icell.left_child)
                     ovfrow, ovfkey ,ovfl, ovfr = n.add(rowid,key)
                     #add on left child and handle checks + recursion up
                     break
+                intAdd = intAdd + 1
             if not found:
+                    print("\tKey Not Found")
                     n = ind._fetch_node(p.pnum_right)
                     ovfrow, ovfkey ,ovfl, ovfr = n.add(rowid,key)
 
         else: # p.type == pt.IndexLeaf
-            print("Leaf Insert")
+            print(str(self.pagenum) + " Leaf Insert")
             #check if the key exists and if so add
             exists = False
             for icell in cells:
                 if key == icell.key:
+                    print("\tKey Exists")
                     exists = True
                     #add to cell and handle checks
-                    icell.rowids.append(rowid)
-                    print("TEST " + str(p.get_free_size()))
+                    icell.rowids.add(rowid)
                     break
             if not exists:
-                cell = create_cell(pt.IndexLeaf,p.tuple_types,rowids = [rowid], key = key)
+                print("\tKey Doesn't Exist")
+                cell = create_cell(pt.IndexLeaf,p.tuple_types,rowids = {rowid}, key = key)
                 #Insert cell into node
                 for i in range(len(cells)):
                     if key < cells[i].key:
@@ -86,26 +89,47 @@ class IndexNode(object):
         #Handle ovf
         #Check size requirements
         if ovfrow != None:
-            #Iterate through to find where ovf key goes. 
-            cells[intAdd].left_child = ovfr.pagenum
-            ovfr._reparent(cells[intAdd].pagenum)
-            ovfc = create_cell(pt.IndexInterior, self.tuple_types, rowids = ovfrow,key = ovfkey, left_child = ovfl.pagenum)
-            cells.insert(intAdd, ovfc)
+ #           print(ovfr.pagenum)
+            print(str(self.pagenum) + " OVF Returned")
+            if found: 
+                print("\tMerge from cells")
+                #Iterate through to find where ovf key goes. 
+                cells[intAdd].left_child = ovfr.pagenum
+                ovfr._reparent(self.pagenum)
+                ovfc = create_cell(pt.IndexInterior, p.tuple_types, rowids = ovfrow,key = ovfkey, left_child = ovfl.pagenum)
+                cells.insert(intAdd, ovfc)
+            else:
+                print("\tMerge from right")
+
+                ovfc = create_cell(pt.IndexInterior, p.tuple_types, rowids = ovfrow,key = ovfkey, left_child = ovfl.pagenum)     
+                p.pnum_right = ovfr.pagenum
+                ovfr._reparent(self.pagenum)
+                cells.append(ovfc)
+
         
         if p.get_free_size() < 0:
-            ovfr = ind._create_node(p.type, INVALID_OFF, INVALID_OFF,cells[len(cells)//2+1:])
-            ovfrow = cells[len(cells)//2].rowids
-            ovfkey = cells[len(cells)//2].key
-            print(len(cells)//2)
-            for i in reversed(range(len(cells)//2,len(cells))):
-                print(i)
-                del cells[i]
+            print("\tReturning OVF")
+            if len(cells) > 2:
+                ovfr = None
+                if p.pnum_right == None:
+                    print("\tLeaf")
+                    ovfr = ind._create_node(p.type, INVALID_OFF, INVALID_OFF,cells[len(cells)//2+1:])
+                else:
+                    print("\tInterior")
+                    ovfr = ind._create_node(p.type, p.pnum_right, INVALID_OFF,cells[len(cells)//2+1:])
+                ovfrow = cells[len(cells)//2].rowids
+                ovfkey = cells[len(cells)//2].key
+                for i in reversed(range(len(cells)//2,len(cells))):
+                    del cells[i]
+                self.writeback()
+                return ovfrow,ovfkey, self, ovfr
+                #split, writeback, and return overflow
+            else:
+                raise FileFormatError('Page cannot be split. Database may be in an inconsistent state.')
+
+        else:
             self.writeback()
-            return ovfrow,ovfkey, self, ovfr
-            #split, writeback, and return overflow
-        
-        self.writeback()
-        return None,None,None,None
+            return None,None,None,None
     
     #def get_branch(self, rowid):
     #    p = self.__page
@@ -192,11 +216,10 @@ class IndexFile(PagingFile):
         
         #THIS IS WHERE THE TEST BEGINS
 
-        print(rowid)
-        print(keyv)
         #if no root, make a new root and insert
         if self.__root == None:
-            cell = create_cell(pt.IndexLeaf, self.tuple_types, rowids = [rowid], key = keyv)
+            print("Wtf")
+            cell = create_cell(pt.IndexLeaf, self.tuple_types, rowids = {rowid}, key = keyv)
             self.__root = self._create_node(pt.IndexLeaf, INVALID_OFF,
                     INVALID_OFF, [cell])
          

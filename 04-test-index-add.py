@@ -3,8 +3,10 @@ from file import *
 from file.index import IndexFile
 from file.paging import INVALID_OFF
 from file.valuetype import Float32
+from file.valuetype import Date
+import datetime
 
-types = [vt.TEXT]
+types = [vt.DATE]
 
 #Tag ID     Name     Weight(kg)    Age (years)
 data = ((933,   b'Rover',   Float32(20.6), 4),
@@ -56,14 +58,11 @@ data = ((933,   b'Rover',   Float32(20.6), 4),
         (1223,  b'Peanut',  Float32(14.3), 2))
 '''
 dbfile = IndexFile(open('dogs.ind', 'w+b'), types, 128, root_page = INVALID_OFF)
-dbfile.add(88,b'Rover')
-for j in range(dbfile.next_page()):
-    print(repr(dbfile.read_page(j)))
-input('************* Next... *****************')
 #REMOVED LOOP FOR NOW 
-for i in range(len(data)):
-
-    dbfile.add(i,data[i][1])
+i = 1;
+while True:
+    dbfile.add(i,Date(datetime.datetime(2000+i,12,21)))
+    i+=1
     for j in range(dbfile.next_page()):
         print(repr(dbfile.read_page(j)))
     input('************* Next... *****************')
