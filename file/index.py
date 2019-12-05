@@ -218,7 +218,6 @@ class IndexFile(PagingFile):
 
         #if no root, make a new root and insert
         if self.__root == None:
-            print("Wtf")
             cell = create_cell(pt.IndexLeaf, self.tuple_types, rowids = {rowid}, key = keyv)
             self.__root = self._create_node(pt.IndexLeaf, INVALID_OFF,
                     INVALID_OFF, [cell])
