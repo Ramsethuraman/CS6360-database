@@ -1,6 +1,7 @@
 import cmd
 from termcolor import colored
 from file import DBError
+from .tokenizer import Tokenizer, TokenType as tt
 from .handler import *
 from . import davisbase_constants as dc
 
@@ -9,16 +10,13 @@ def print_error(msg):
 
 def wrap_error(fn, *args, **kwargs):
     try:
-        fn(*args, **kwargs)
+        return fn(*args, **kwargs)
     except DBError as exc:
         msg = ' '.join(map(str, exc.args))
         print_error(msg)
     except:
         import traceback
         print_error(traceback.format_exc())
-
-def shutdown():
-    return True
 
 
 class DatabaseREPL(cmd.Cmd):    
@@ -92,9 +90,8 @@ class DatabaseREPL(cmd.Cmd):
 
         return lines[0]
 
-
-    def do_eof(self, args):
-        return True
+    def onecmd(self, line):
+        return wrap_error(super().onecmd, line)
 
     #DDL commands
     def do_show(self, args):
@@ -106,30 +103,36 @@ class DatabaseREPL(cmd.Cmd):
         wrap_error(show_tables_query_handler)
 
     def do_create(self, args):
-        command = args.lower().strip().strip(';')
-        if (command.startswith(dc.INDEX_KEYWORD.lower())):
-            #TODO - Unclear on syntax for CREATE INDEX
-            print_error('TODO: CREATE INDEX')
-            pass
+        SYN_ERROR = 'Syntax error: CREATE [TABLE|INDEX] ...'
+        tkn = Tokenizer(args.strip())
+        
+        if tkn.expect_ident(dc.INDEX_KEYWORD, dc.TABLE_KEYWORD) == 0:
+            tkn.expect(tt.IDENT)
+            tbl_name = tkn.lval
+
+            tkn.expect(tt.LP)
+            tkn.expect(tt.IDENT)
+            col_name = tkn.lval
+            tkn.expect(tt.RP)
+            tkn.assert_end()
+
+            wrap_error(create_index_handler, tbl_name, col_name)
         else:
-            split_command = command.split(dc.TABLE_KEYWORD.lower() + ' ')
-            if len(split_command) < 2:
-                print_error('Syntax error: CREATE TABLE <TABLE_NAME> (<COLUMN_NAME> <DATA_TYPE> <NOT_NULL> <UNIQUE>,...)')
-                return
+            tkn.expect(tt.IDENT)
+            tbl_name = tkn.lval
 
-            #Check if parentheses are balanced
-            first_paren = split_command[1].find('(')
-            second_paren = split_command[1].find(')')
-
-            if (first_paren == -1 or second_paren == -1 or first_paren >= second_paren):
-                print_error('Parentheses aren\'t balanced')
-                return
-            
-            table_name = split_command[1][:first_paren].strip()
-            
-            column_list = split_command[1][first_paren + 1:second_paren].strip().split(',')
-            column_list = [x.strip() for x in column_list]
-
+            cur_col = []
+            column_list = []
+            tkn.expect(tt.LP)
+            while True:
+                ttype = tkn.expect(tt.LP, tt.IDENT, tt.COMMA)
+                if ttype == tt.IDENT:
+                    cur_col.append(tkn.lval)
+                elif ttype == tt.RP:
+                    if not cur_col:
+                        print_error('Empty column specifier')
+                        return
+                    break
             wrap_error(create_table_query_handler, table_name, column_list)
 
     def do_drop(self, args):
@@ -148,40 +151,43 @@ class DatabaseREPL(cmd.Cmd):
         wrap_error(drop_tables_query_handler, table_name)
 
     def do_exit(self, args):
-        shutdown()
+        return True
 
-    def do_EOF(self, args):
-        shutdown()
+    def do_eof(self, args):
+        return True
     
     #DML commands
     def do_insert(self, args):
-        command = args.lower().strip().strip(';')
-        split_command = command.split(dc.INTO_KEYWORD.lower() + ' ')
-        if len(split_command) < 2:
-            print_error('Syntax error: INSERT INTO <TABLE_NAME> (<COLUMN_LIST>) VALUES (<VALUE_LIST>)')
+        tkn = Tokenizer(args)
+        tkn.expect_ident(dc.INTO_KEYWORD)
+
+        tkn.expect(tt.IDENT)
+        table_name = tkn.lval
+
+        column_list = []
+        tkn.expect(tt.LP)
+        while True:
+            tkn.expect(tt.IDENT) 
+            column_list.append(tkn.lval)
+            ttype = tkn.expect(tt.RP, tt.COMMA)
+            if ttype == tt.RP:
+                break
+
+        tkn.expect_ident(dc.VALUES_KEYWORD)
+        values = []
+        tkn.expect(tt.LP)
+        while True:
+            tkn.expect(tt.TEXT, tt.FLOAT, tt.INT) 
+            values.append(tkn.lval)
+            ttype = tkn.expect(tt.RP, tt.COMMA)
+            if ttype == tt.RP:
+                break
+
+        if len(values) != len(column_list):
+            print_error('Mismatch length of values and columns')
             return
-        
-        first_pair_open_paren = split_command[1].find('(')
-        first_pair_close_paren = split_command[1].find(')')
-        second_pair_open_paren = split_command[1].find('(', first_pair_open_paren + 1)
-        second_pair_close_paren = split_command[1].find(')', first_pair_close_paren + 1)
 
-        if (first_pair_open_paren >= first_pair_close_paren or second_pair_open_paren >= second_pair_close_paren):
-            print_error('Parentheses aren\'t balanced')
-            return
-        
-        table_name = split_command[1][:first_pair_open_paren].strip()
-
-        column_list = split_command[1][first_pair_open_paren + 1:first_pair_close_paren].strip().split(',')
-        column_list = [x.strip() for x in column_list]
-
-        value_list = split_command[1][second_pair_open_paren + 1:second_pair_close_paren].strip().split(',')
-        value_list = [x.strip() for x in value_list]
-
-        #TODO - Handle validation if column list and value list arent equal
-        #TODO - Check for keyword 'VALUES'
-
-        wrap_error(insert_query_handler, table_name, column_list, value_list)
+        wrap_error(insert_query_handler, table_name, column_list, values)
 
     def do_delete(self, args):
         SYNTAX_ERROR_MSG = 'Syntax error: DELETE FROM table_name WHERE <CONDITION>'
@@ -266,5 +272,5 @@ class DatabaseREPL(cmd.Cmd):
             self.cmdloop('Starting database...')
             print('\nBye')
         except KeyboardInterrupt:
-            shutdown()
+            pass
 

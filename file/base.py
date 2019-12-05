@@ -180,20 +180,21 @@ class AbstractDBFile(object):
                 tup[mod_colind] = new_value
         return changed
 
-    def insert(self, tup = None, **kwargs):
+    def insert(self, val = None):
         ''' Inserts a row into the table. The caller may either supply an entire
-        tuple, XOR a series of key=value pairs. '''
+        tuple, or a dict mapping '''
 
-        if (tup != None) == bool(kwargs):
-            raise DBError('Give either a full pair tuple or keyword arguments')
-        if tup == None:
+        if val == None:
+            raise ValueError('Invalid argument to insert')
+        elif type(val) is dict:
             tup = [None] * len(self.__columns)
-            for key, val in kwargs.items():
+            for key, val in val.items():
                 tup[self._parse_column(key)] = val
-        else:
-            if len(tup) != len(self.__columns):
+        elif type(tup) in (list, tuple):
+            if len(val) != len(self.__columns):
                 raise DBError('Expected a tuple of length '+
                         f'{len(self.__columns)}, got length {len(tup)}')
+            tup = val
 
         return catch_err(self._insert, tup)
 
@@ -225,7 +226,8 @@ class AbstractDBFile(object):
             tab.add_row(x)
 
         if hasattr(self, 'name'):
-            print(self.name)
+            print('+-' + '-' * len(self.name))
+            print('| ' + self.name)
         print(tab)
         print('')
 
