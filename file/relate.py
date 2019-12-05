@@ -161,7 +161,7 @@ class RelationalDBFile(AbstractDBFile):
         idx = None # TODO:
         self.__idx[colind] = idx
         # TODO: populate index
-
+        raise DBError('create_index is not implemented')
 
     def _get_index(self, colind, create_mem=True):
         idx = self.__idx[colind] 

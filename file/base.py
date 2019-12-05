@@ -99,6 +99,14 @@ class AbstractDBFile(object):
             raise DBError(f'Invalid column value "{column}"')
         
 
+    def create_index(self, col_name):
+        ''' Create an index on the column name. '''
+        catch_err(self._create_index, self._parse_column(col_name))
+
+    def _create_index(self, colind):
+        # Does nothing by default
+        pass
+
     def find_colind_byname(self, column_name):
         ''' Finds the column index (which is the order that this data is put
         within each record tuple) corresponding to the given column name. Note
@@ -225,9 +233,9 @@ class AbstractDBFile(object):
                     x[i] = str(x[i], 'utf8')
             tab.add_row(x)
 
-        if hasattr(self, 'name'):
-            print('+-' + '-' * len(self.name))
-            print('| ' + self.name)
+        #if hasattr(self, 'name'):
+        #    print('+-' + '-' * len(self.name))
+        #    print('| ' + self.name)
         print(tab)
         print('')
 

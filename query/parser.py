@@ -5,19 +5,6 @@ from .tokenizer import Tokenizer, TokenType as tt
 from .handler import *
 from . import davisbase_constants as dc
 
-def print_error(msg):
-    print(colored(msg, 'red'))
-
-def wrap_error(fn, *args, **kwargs):
-    try:
-        return fn(*args, **kwargs)
-    except DBError as exc:
-        msg = ' '.join(map(str, exc.args))
-        print_error(msg)
-    except:
-        import traceback
-        print_error(traceback.format_exc())
-
 
 class DatabaseREPL(cmd.Cmd):    
 
@@ -27,8 +14,14 @@ class DatabaseREPL(cmd.Cmd):
         self.__fullline = ''
         self.__prev_nonempty = False
 
+    def print_error(self, msg):
+        print(colored(msg, 'red'))
+        self.cmdqueue.clear()
+
     def default(self, line):
-        print_error('Unknown syntax: ' + str(line))
+        cmds = [x[3:].upper() for x in dir(self) if x.startswith('do_')]
+        self.print_error(f'Expected: [{"|".join(cmds)}] ...')
+        self.print_error('Type in help <cmd> for further usage info')
 
     def emptyline(self):
         # Does nothing, maintain state
@@ -43,6 +36,9 @@ class DatabaseREPL(cmd.Cmd):
             return cmd.lower(), arg, line
 
     def precmd(self, line):
+        line, _, _ = line.partition('##')
+        line = line.strip()
+
         # Some conditions to pass through
         if self.cmdqueue:
             # Queue meaning that we are executing multiple statements
@@ -91,19 +87,40 @@ class DatabaseREPL(cmd.Cmd):
         return lines[0]
 
     def onecmd(self, line):
-        return wrap_error(super().onecmd, line)
+        try:
+            return super().onecmd(line)
+        except DBError as exc:
+            msg = ' '.join(map(str, exc.args))
+            self.print_error(msg)
+        except:
+            import traceback
+            self.print_error(traceback.format_exc())
+            self.cmdqueue.clear()
 
     #DDL commands
     def do_show(self, args):
+        '''
+SHOW TABLES
+
+    Show the list of all tables (including metatables)
+        '''
         # TODO: can you NOT lowercase pls
         command = args.lower().strip().strip(';')
         if command != dc.TABLES_KEYWORD.lower():
-            print_error('Syntax error: SHOW TABLES')
+            self.print_error('Syntax error: SHOW TABLES')
             return
-        wrap_error(show_tables_query_handler)
+        show_tables_query_handler()
 
     def do_create(self, args):
-        SYN_ERROR = 'Syntax error: CREATE [TABLE|INDEX] ...'
+        '''
+CREATE INDEX table_name (column_name)
+
+    Creates an index on table_name and column_name.
+
+CREATE TABLE table_name (col_name <TYPE> [NOT NULL] [UNIQUE] [, ...])
+
+    Creates a new table with a set of columns and its types.
+        '''
         tkn = Tokenizer(args.strip())
         
         if tkn.expect_ident(dc.INDEX_KEYWORD, dc.TABLE_KEYWORD) == 0:
@@ -116,7 +133,7 @@ class DatabaseREPL(cmd.Cmd):
             tkn.expect(tt.RP)
             tkn.assert_end()
 
-            wrap_error(create_index_handler, tbl_name, col_name)
+            create_index_handler(tbl_name, col_name)
         else:
             tkn.expect(tt.IDENT)
             tbl_name = tkn.lval
@@ -130,34 +147,52 @@ class DatabaseREPL(cmd.Cmd):
                     cur_col.append(tkn.lval)
                 elif ttype == tt.RP:
                     if not cur_col:
-                        print_error('Empty column specifier')
+                        self.print_error('Empty column specifier')
                         return
                     break
-            wrap_error(create_table_query_handler, tbl_name, column_list)
+            tkn.assert_end()
+            create_table_query_handler(tbl_name, column_list)
 
     def do_drop(self, args):
-        command = args.lower().strip().strip(';')
+        '''
+DROP table_name
+
+    Removes a table file, its meta-data, and any associated indexes it may have. 
+        '''
+        command = args.strip().strip(';')
         if not command.startswith(dc.TABLE_KEYWORD.lower() + ' '):
-            print_error("Syntax error: DROP TABLE <TABLE_NAME>")
+            self.print_error("Syntax error: DROP TABLE <TABLE_NAME>")
             return
         command_split = command.split(' ')
         if len(command_split) > 2:
-            print_error("More than one tables entered")
+            self.print_error("More than one tables entered")
             return
         table_name = command_split[1].strip()
         if table_name == '':
-            print_error('No table name specified')
+            self.print_error('No table name specified')
             return
-        wrap_error(drop_tables_query_handler, table_name)
+        drop_tables_query_handler(table_name)
 
     def do_exit(self, args):
+        '''
+Exit the program
+        '''
         return True
 
     def do_eof(self, args):
+        '''
+Exit the program
+        '''
         return True
     
     #DML commands
     def do_insert(self, args):
+        '''
+INSERT INTO table_name (col1[, ...]) VALUES (val1[, ...])
+
+    Insert a row entry into the specified table. Any columns not supplied will
+    be NULL'd out.
+        '''
         tkn = Tokenizer(args)
         tkn.expect_ident(dc.INTO_KEYWORD)
 
@@ -183,47 +218,64 @@ class DatabaseREPL(cmd.Cmd):
             if ttype == tt.RP:
                 break
 
+        tkn.assert_end()
+
         if len(values) != len(column_list):
-            print_error('Mismatch length of values and columns')
+            self.print_error('Mismatch length of values and columns')
             return
 
-        wrap_error(insert_query_handler, table_name, column_list, values)
+        insert_query_handler(table_name, column_list, values)
 
     def do_delete(self, args):
+        '''
+DELETE FROM table_name WHERE <column> <cond> <value>
+
+    Delete all rows with the following column value specified. 
+
+    <cond> can be of the following: <, <=, =, !=, >=, >
+        '''
         SYNTAX_ERROR_MSG = 'Syntax error: DELETE FROM table_name WHERE <CONDITION>'
         command = args.lower().strip().strip(';')
         split_command = command.split(dc.FROM_KEYWORD.lower() + ' ')
         if len(split_command) < 2:
-            print_error(SYNTAX_ERROR_MSG)
+            self.print_error(SYNTAX_ERROR_MSG)
             return
         
         where_keyword_index = split_command[1].find(' ' + dc.WHERE_KEYWORD.lower() + ' ')
         if where_keyword_index == -1:
-            print_error(SYNTAX_ERROR_MSG)
+            self.print_error(SYNTAX_ERROR_MSG)
             return
 
         table_name = split_command[1][:where_keyword_index].strip()
 
         where_clause = split_command[1][where_keyword_index + 1 + len(dc.WHERE_KEYWORD):].strip()
         if not where_clause:
-            print_error('Missing where clause')
+            self.print_error('Missing where clause')
 
-        wrap_error(delete_query_handler, table_name, where_clause)
+        delete_query_handler(table_name, where_clause)
 
     def do_update(self, args):
+        '''
+UPDATE table_name SET <mod_column> = <new_value> WHERE <cond_column> <cond> <cond_value>
+
+    Update all rows that match the specified condition, on the mod_column and
+    set that to new_value
+
+    <cond> can be of the following: <, <=, =, !=, >=, >
+        '''
         SYNTAX_ERROR_MSG = 'Syntax error: UPDATE <TABLE_NAME> SET <COLUMN_NAME> = <VALUE> WHERE <CONDITION>'
         command = args.lower().strip().strip(';')
 
         split_command = command.split(' ' + dc.SET_KEYWORD.lower() + ' ')
         if len(split_command) < 2:
-            print_error(SYNTAX_ERROR_MSG)
+            self.print_error(SYNTAX_ERROR_MSG)
             return
 
         table_name = split_command[0].strip()
 
         where_keyword_index = split_command[1].find(' ' + dc.WHERE_KEYWORD.lower() + ' ')
         if where_keyword_index == -1:
-            print_error(SYNTAX_ERROR_MSG)
+            self.print_error(SYNTAX_ERROR_MSG)
             return
 
         column_str = split_command[1][:where_keyword_index].strip()
@@ -235,20 +287,30 @@ class DatabaseREPL(cmd.Cmd):
         
         where_clause = split_command[1][where_keyword_index + 1 + len(dc.WHERE_KEYWORD):].strip()
         if not where_clause:
-            print_error('Missing where clause')
+            self.print_error('Missing where clause')
 
-        wrap_error(update_query_handler, table_name, column_name, column_value, where_clause)
+        update_query_handler(table_name, column_name, column_value, where_clause)
 
     #DQL commands
     def do_select(self, args):
+        '''
+SELECT <column_set>|* FROM table_name [WHERE <column> <cond> <value>]
+
+    Select a set of row entries that meet the condition if specified, or all of
+    entries in the table if ignored. If * is specified in place of <column_set>,
+    all columns are displayed, else only those columns in <column_set> will be
+    shown.
+
+    <cond> can be of the following: <, <=, =, !=, >=, >
+        '''
         command = args.lower().strip(';')
         split_command = command.split(dc.FROM_KEYWORD.lower())
         if len(split_command) == 1:
-            print_error('Expected ' + dc.FROM_KEYWORD + ' keyword')
+            self.print_error('Expected ' + dc.FROM_KEYWORD + ' keyword')
             return
         column_list = split_command[0].strip()
         if len(column_list) == 0:
-            print_error('No column names specified')
+            self.print_error('No column names specified')
             return
         column_list = column_list.split(',')
         column_list = [x.strip() for x in column_list]
@@ -260,12 +322,12 @@ class DatabaseREPL(cmd.Cmd):
             #Where clause specified
             where_clause = rest_of_command[1].strip()
             if not where_clause:
-                print_error('No where clause specified')
+                self.print_error('No where clause specified')
         table_name = rest_of_command[0].strip()
         if len(table_name) == 0:
-            print_error('No table name specified')
+            self.print_error('No table name specified')
             return
-        wrap_error(select_query_handler, column_list, table_name, where_clause)
+        select_query_handler(column_list, table_name, where_clause)
 
     def cmdloop_with_keyboard_interrupt(self):
         try:

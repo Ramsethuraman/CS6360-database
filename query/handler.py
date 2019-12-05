@@ -16,8 +16,7 @@ def _parse_where(where_clause):
     return name, val, oper
 
 def create_index_handler(table_name, column_name):
-    # TODO
-    pass
+    get_dbfile(table_name).create_index(column_name)
 
 def drop_tables_query_handler(table_name):
     drop_dbfile(table_name)
