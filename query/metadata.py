@@ -36,22 +36,32 @@ def get_column_specs(table_id):
             is_null, is_uniq))
     return col_specs
 
+startup = [['davisbase_tables', tables_cols], 
+        ['davisbase_columns', columns_cols]]
+need_init = False
+
 # TODO: refactor these string constants
 def meta_initialize1():
+    global need_init
     tbl_tables = _meta_create_dbfile('davisbase_tables', tables_cols)
+
+    # Add tables first if needed
+    if not next(tbl_tables.find('table_name', 'davisbase_tables'), None):
+        for tbl_spec in startup:
+            tbl_spec.append(tbl_tables.insert((None, tbl_spec[0], -1, 0)))
+
+        # Mark next initialization stage to load the columns
+        need_init = True
+
     return tbl_tables
 
 def meta_initialize2():
+    global need_init
     tbl_tables = _meta_create_dbfile('davisbase_tables', tables_cols)
     tbl_columns = _meta_create_dbfile('davisbase_columns', columns_cols)
 
-    if not next(tbl_tables.find('table_name', 'davisbase_tables'), None):
-        startup = [['davisbase_tables', tables_cols], 
-                ['davisbase_columns', columns_cols]]
-
-        # Add tables first
-        for tbl_spec in startup:
-            tbl_spec.append(tbl_tables.insert((None, tbl_spec[0], -1, 0)))
+    if need_init:
+        need_init = False
 
         # Then add the columns
         for _, cols, tbl_rowid in startup:

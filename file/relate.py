@@ -143,6 +143,12 @@ class RelationalDBFile(AbstractDBFile):
                 last_rowid = last_rowid, root_page = root_page)
         self.__idx = [None] * len(cols)
 
+    def close(self):
+        self.__tbl.close()
+
+    def flush(self):
+        self.__tbl.flush()
+
     @property
     def meta(self):
         return self._meta
@@ -184,7 +190,7 @@ class RelationalDBFile(AbstractDBFile):
         return idx
 
     def _update_dirty(self):
-        if dbfile_tables == None:
+        if in_bootstrap:
             return
         try:
             dbfile_tables.select_one('table_name', self.__name)
@@ -370,16 +376,27 @@ _meta = None
 _tbls = {}
 dbfile_tables = None
 dbfile_columns = None
+in_bootstrap = True
 def _doinit():
-    global _init, dbfile_tables, dbfile_columns, _meta
+    global _init, dbfile_tables, dbfile_columns, _meta, in_bootstrap
     if _init:
         return
 
     from query import metadata
     _init = True
     _meta = metadata
-    dbfile_tables = _meta.meta_initialize1()
+
+    old = dbfile_tables = _meta.meta_initialize1()
+    in_bootstrap = False
+    dbfile_tables._update_dirty()
+    old.flush()
+    
+    in_bootstrap = True
+
     dbfile_tables, dbfile_columns = _meta.meta_initialize2()
+    old.close()
+
+    in_bootstrap = False
     _tbls[dbfile_tables.name] = dbfile_tables
     _tbls[dbfile_columns.name] = dbfile_columns
     dbfile_tables._update_dirty()

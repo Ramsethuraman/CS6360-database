@@ -225,7 +225,7 @@ class DateTime(DBData):
 
     @classmethod
     def parse(cls, strval):
-        return DateTime(_strptime(strval, cls._dfmt))
+        return cls(_strptime(cls._dfmt, strval))
 
     def __init__(self, year, month=None, day=None, hour=0, minute=0,
             second=0, millis=0):

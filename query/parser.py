@@ -36,7 +36,7 @@ class DatabaseREPL(cmd.Cmd):
             return cmd.lower(), arg, line
 
     def precmd(self, line):
-        line, _, _ = line.partition('##')
+        line, _, _ = line.partition('--')
         line = line.strip()
 
         # Some conditions to pass through
@@ -149,7 +149,15 @@ CREATE TABLE table_name (col_name <TYPE> [NOT NULL] [UNIQUE] [, ...])
                     if not cur_col:
                         self.print_error('Empty column specifier')
                         return
+                    column_list.append(cur_col)
                     break
+                elif ttype == tt.COMMA:
+                    if not cur_col:
+                        self.print_error('Empty column specifier')
+                        return
+                    column_list.append(cur_col)
+                    cur_col = []
+
             tkn.assert_end()
             create_table_query_handler(tbl_name, column_list)
 

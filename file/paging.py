@@ -365,6 +365,9 @@ class PagingFile(object):
     def close(self):
         self.__file.close()
 
+    def flush(self):
+        self.__file.flush()
+
     def next_page(self):
         sz = self.__file.seek(0, 2)
         return (sz + self.__page_size - 1) // self.__page_size

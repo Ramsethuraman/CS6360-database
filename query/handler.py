@@ -5,11 +5,26 @@ import re
 types = vt.__members__
 
 def _parse_where(where_clause):
+    invert_map = {
+        '>=': '<',
+        '>': '<=',
+        '=': '!=',
+        '!=': '=',
+        '<': '>=',
+        '<=': '>'
+    }
+    invert = False
     tkn = Tokenizer(where_clause)
     tkn.expect(tt.IDENT)
+    if tkn.lval.lower() == 'not':
+        invert = True
+        tkn.expect(tt.IDENT)
     name = tkn.lval
     tkn.expect(tt.OPER)
     oper = tkn.lval
+    if invert:
+        oper = invert_map[oper]
+
     tkn.expect(tt.INT, tt.FLOAT, tt.TEXT)
     val = tkn.lval
     tkn.assert_end()
@@ -34,7 +49,7 @@ def create_table_query_handler(table_name, column_list):
     for col in column_list:
         name = col[0]
         if name in used_names:
-            raise DBError('Two columns defined with same name')
+            raise DBError(f'Two columns defined with same name: `{name}`')
         used_names.add(name)
 
         state = 0
@@ -48,28 +63,32 @@ def create_table_query_handler(table_name, column_list):
                     state = 1
                 elif val == 'UNIQUE':
                     is_uniq = True
+                elif val == 'LONG':
+                    if dtype != None:
+                        raise DBError('Multiple data types defined')
+                    dtype = 'BIGINT'
                 elif val in types:
                     if dtype != None:
                         raise DBError('Multiple data types defined')
                     dtype = val
                 else:
-                    raise DBError(SYN_ERROR)
+                    raise DBError(f'Expected: NOT|UNIQUE|types, got {val}')
             elif state == 1:
                 if val == 'NULL':
                     is_null = False
                     state = 0
                 else:
-                    raise DBError(SYN_ERROR)
+                    raise DBError('Expected: NULL, got {val}')
 
         col_spec.append((name, dtype, len(col_spec) + 1, is_null, is_uniq))
 
     create_dbfile(table_name, col_spec)
 
 def select_query_handler(column_list, table_name, where_clause):
-    if column_list == ['*']:
-        column_list = None
-
     tbl = get_dbfile(table_name)
+    if column_list == ['*']:
+        column_list = tbl.columns[1:]
+
     if where_clause:
         args = tuple(_parse_where(where_clause)) + (column_list,)
         rs = tbl.find(*args)

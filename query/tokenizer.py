@@ -76,7 +76,7 @@ class Tokenizer(object):
                     if x + 1 >= len(self.__text):
                         raise DBError(f'Expected digit but got EOF')
                     c = self.__text[x + 1]
-                    if c not in self.digits:
+                    if c not in string.digits:
                         raise DBError(f'Expected digit but got `{c}`')
                     num += '.' + self._parse_greedy(string.digits)
                     self.__val = float(num)
@@ -92,6 +92,9 @@ class Tokenizer(object):
                 if c1 == '=':
                     self.__pos += 1
                     self.__val = c + c1
+                elif c == '<' and c1 == '>':
+                    self.__pos += 1
+                    self.__val = '!='
                 else:
                     self.__val = c
                 return tt.OPER
