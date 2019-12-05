@@ -433,5 +433,3 @@ def drop_dbfile(table_name):
     _check_tbl_name(table_name)
     get_dbfile(table_name).drop()
 
-
-
