@@ -218,7 +218,11 @@ class AbstractDBFile(object):
         tab = PrettyTable()
         tab.field_names = columns
         for tup in tups:
-            tab.add_row(tup)
+            x = list(tup)
+            for i in range(len(x)):
+                if type(x[i]) == bytes:
+                    x[i] = str(x[i], 'utf8')
+            tab.add_row(x)
 
         if hasattr(self, 'name'):
             print(self.name)

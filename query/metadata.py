@@ -25,14 +25,14 @@ def _yn_bool(boolstr):
         x = str(boolstr, 'utf8')
         raise FileFormatError(f'Must be "YES" or "NO" string, but got "{x}"')
 
-def get_column_specs(table_name):
+def get_column_specs(table_id):
     col_specs = []
-    tbl_columns = get_column_specs()
+    tbl_columns = get_meta_columns()
     for _, _, col_name, data_type, pos, is_null, is_uniq in \
-            tbl_columns.select('table_name', bytes(table_name, 'utf8')):
+            tbl_columns.select('table_rowid', table_id):
         is_null = _yn_bool(is_null)
         is_uniq = _yn_bool(is_uniq)
-        col_specs.append((col_name, data_type, ordinal_position, 
+        col_specs.append((str(col_name, 'utf8'), str(data_type, 'utf8'), pos, 
             is_null, is_uniq))
     return col_specs
 

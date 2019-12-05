@@ -402,23 +402,18 @@ def get_meta_columns():
 def get_dbfile(table_name):
     _doinit()
     # Check cache
-    if tbl.name in _tbls:
-        return _tbls[tbl.name]
+    if table_name in _tbls:
+        return _tbls[table_name]
 
     # Then go through to actually fetch on disk
     _check_tbl_name(table_name)
     if not os.access(path_base + table_name + '.tbl', os.F_OK):
         raise DBError(f'Table {table_name} does not exist!')
 
-    _, _, root, last_rowid = dbfile_tables.select_one('table_name',
-            bytes(table_name, 'utf8'))
+    rowid, _, root, last_rowid = dbfile_tables.select_one('table_name',
+            table_name)
 
-    col_specs = []
-    for _, _, col_name, data_type, pos, is_null, is_uniq in \
-            dbfile_columns.select('table_name', bytes(table_name, 'utf8')):
-        col_specs.append((str(col_name, 'utf8'), str(data_type, 'utf8'), 
-                ordinal_position, is_null != b'NO', is_unique != b'NO'))
-
+    col_specs = _meta.get_column_specs(rowid)
     tbl = RelationalDBFile((table_name, root, last_rowid), col_specs)
     _tbls[tbl.name] = tbl
     return tbl
