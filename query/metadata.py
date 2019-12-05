@@ -60,7 +60,7 @@ def meta_initialize():
 
     return tbl_tables, tbl_columns
 
-def init_metadata_for(table_name, column_spec):
+def init_metadata_for(table_name, column_specs):
     tbl_tables = get_meta_tables()
     tbl_columns = get_meta_columns()
 

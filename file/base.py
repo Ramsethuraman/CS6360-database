@@ -1,3 +1,5 @@
+from prettytable import PrettyTable
+
 __all__ = ['FileFormatError', 'AbstractDBFile']
 
 def require_params(params, *names):
@@ -209,5 +211,20 @@ class AbstractDBFile(object):
 
     def _drop(self):
         pass
+
+    def print_table(self, tups, columns = None):
+        if columns == None:
+            columns = self.__columns
+        tab = PrettyTable()
+        tab.field_names = columns
+        for tup in tups:
+            tab.add_row(tup)
+
+        if hasattr(self, 'name'):
+            print(self.name)
+        print(tab)
+        print('')
+
+
 
 

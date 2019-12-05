@@ -7,24 +7,14 @@ from .table import TableFile
 from .valuetype import ValueType as vt, parse_from_str, parse_from_int, \
         vpack1, Float32, NULLVAL
 
+
+
 __all__ = ['RelationalDBFile', 'create_dbfile', 'drop_dbfile', 'get_dbfile',
         'get_meta_columns', 'get_meta_tables']
 
 path_base = './table/'
 
 types = vt.__members__
-
-tables_cols = (('rowid',      'INT',  1, False, True), 
-               ('table_name', 'TEXT', 2, False, True),
-               ('root_page',  'INT',  3, False, False),
-               ('last_rowid', 'INT',  4, False, False))
-columns_cols = (('rowid',       'INT',  1, False, True), 
-                ('table_rowid', 'INT',  2, False, False),
-                ('column_name', 'TEXT', 3, False, False),
-                ('data_type',   'TEXT', 4, False, False),
-                ('ordinal_position', 'TINYINT', 5, False, False),
-                ('is_nullable', 'TEXT', 6, False, False), 
-                ('is_unique',   'TEXT', 7, False, False))
 
 class DBColumn(object):
     def __init__(self, col_name, data_type, pos, is_nullable, is_unique):
@@ -100,19 +90,8 @@ def _check_tbl_name(table_name):
         if c in table_name:
             raise DBError(f'Please do not use {repr(c)} in the table name!')
 
-def create_dbfile(table_name, columns):
-    ''' Creates a table from table name, and a list of tuples of column specs, 
-    the positions/oridinals given here are ignored and will be automatically
-    assigned based on position of columns '''
 
-    _check_tbl_name(table_name)
-
-    if os.access(path_base + table_name + '.tbl', os.F_OK):
-        raise DBError(f'Table {table_name} already exists!')
-    return RelationalDBFile((table_name, INVALID_OFF, 0), columns)
-
-# TODO: primary
-# TODO: refactor root finding function into paging
+# TODO: primary don't need that
 class RelationalDBFile(AbstractDBFile):
     def __init__(self, table_specs, column_specs):
         ''' Creates a relational DB file from the specified table specs and
@@ -159,6 +138,10 @@ class RelationalDBFile(AbstractDBFile):
     @property
     def meta(self):
         return self._meta
+
+    @property
+    def name(self):
+        return self.__name
 
     def _index_file(self, colind):
         return path_base + self.__name + '.' + self.__cols[colind].name + '.ndx'
@@ -374,45 +357,55 @@ def _meta_create_dbfile(table_name, columns):
     ret._meta = True
     return ret
 
-def _yesno(boolval):
-    return ['NO', 'YES'][bool(boolval)]
+_init = False
+_meta = None
+_tbls = {}
+dbfile_tables = None
+dbfile_columns = None
+def _doinit():
+    global _init, dbfile_tables, dbfile_columns, _meta
+    if _init:
+        return
 
-def _init_meta():
-    startup = [['davisbase_tables', tables_cols], 
-            ['davisbase_columns', columns_cols]]
+    from query import metadata
+    _init = True
+    _meta = metadata
+    dbfile_tables, dbfile_columns = _meta.meta_initialize()
+    _tbls[dbfile_tables.name] = dbfile_tables
+    _tbls[dbfile_columns.name] = dbfile_columns
+    dbfile_tables._update_dirty()
+    dbfile_columns._update_dirty()
 
-    # Add tables first
-    for tbl_spec in startup:
-        tbl_spec.append(dbfile_tables.insert((None, tbl_spec[0], -1, 0)))
+def create_dbfile(table_name, columns):
+    ''' Creates a table from table name, and a list of tuples of column specs, 
+    the positions/oridinals given here are ignored and will be automatically
+    assigned based on position of columns '''
 
-    # Then add the columns
-    for _, cols, tbl_rowid in startup:
-        for col in cols:
-            col = [None, tbl_rowid] + list(col)
-            col[5] = _yesno(col[5])
-            col[6] = _yesno(col[6])
-            dbfile_columns.insert(col)
+    _doinit()
+    _check_tbl_name(table_name)
 
-# TODO: refactor these string constants
-dbfile_tables = _meta_create_dbfile('davisbase_tables', tables_cols)
-dbfile_tables = _meta_create_dbfile('davisbase_tables', tables_cols)
-dbfile_columns = _meta_create_dbfile('davisbase_columns', columns_cols)
-
-if next(dbfile_tables.find('table_name', 'davisbase_tables'), None) == None:
-    _init_meta()
+    if os.access(path_base + table_name + '.tbl', os.F_OK):
+        raise DBError(f'Table {table_name} already exists!')
+    tbl = RelationalDBFile((table_name, INVALID_OFF, 0), columns)
+    _meta.init_metadata_for(table_name, columns)
+    _tbls[table_name] = tbl
+    return tbl
 
 def get_meta_tables():
+    _doinit()
     return dbfile_tables
 
 def get_meta_columns():
+    _doinit()
     return dbfile_columns
 
 def get_dbfile(table_name):
-    if table_name == 'davisbase_tables':
-        return get_meta_tables()
-    elif table_name == 'davisbase_columns':
-        return get_meta_columns()
+    _doinit()
+    # Check cache
+    if tbl.name in _tbls:
+        return _tbls[tbl.name]
 
+    # Then go through to actually fetch on disk
     _check_tbl_name(table_name)
     if not os.access(path_base + table_name + '.tbl', os.F_OK):
         raise DBError(f'Table {table_name} does not exist!')
@@ -426,10 +419,13 @@ def get_dbfile(table_name):
         col_specs.append((str(col_name, 'utf8'), str(data_type, 'utf8'), 
                 ordinal_position, is_null != b'NO', is_unique != b'NO'))
 
-    return RelationalDBFile((table_name, root, last_rowid), col_specs)
-
+    tbl = RelationalDBFile((table_name, root, last_rowid), col_specs)
+    _tbls[tbl.name] = tbl
+    return tbl
 
 def drop_dbfile(table_name):
     _check_tbl_name(table_name)
     get_dbfile(table_name).drop()
+    _meta.deinit_metadata_for(table_name)
+    del _tbls[table_name]
 

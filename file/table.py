@@ -170,6 +170,7 @@ class TableNode(object):
 #
 
     def _select_branch(self, rowid):
+        ''' Determines which branch to take to get the rowid '''
         path = self.get_branch(rowid)
         cell = self.get_cell(path)
         if cell == None:
@@ -249,7 +250,6 @@ class TableNode(object):
 
         cell = n.get_cell(path)
         if self.__page.type == pt.TableInterior:
-            n = tbl._fetch_node(cell.left_child)
             return n.modify(rowid, tupleVal)
         else:
             old = cell.tuples
