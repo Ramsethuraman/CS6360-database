@@ -138,7 +138,7 @@ class IndexInteriorCell(IndexLeafCell):
         return f'{tb}IndexInteriorCell {{\n' + \
                 f'{tb}  left_child: {hex(self.left_child)}\n' + \
                 f'{tb}  key: {repr(self.key)}\n' + \
-                f'{tb}  rowids: {repr(rowids)}\n' + \
+                f'{tb}  rowids: {repr(self.rowids)}\n' + \
                 f'{tb}}}'
 
 class TableInteriorCell(DataCell):
