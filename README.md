@@ -2,7 +2,7 @@
 
 Database project for CS6360
 
-Program is only compatible with python 3
+Program is only compatible with Python 3
 Required libraries are listed in the requirements folder.
 
 Commands supported:
