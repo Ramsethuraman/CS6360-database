@@ -97,7 +97,7 @@ class IndexNode(object):
 
         #Check to see if any of the above recursion returned overflow, if so merge.
         if ovfrow != None:
-            print(str(self.pagenum) + " OVF Returned")
+            #print(str(self.pagenum) + " OVF Returned")
             
             #Check if we found a place or not. If we found a place to insert, we will insert in a left child, otherwise, we will do it in the right child.
             if found: 
@@ -255,7 +255,8 @@ class IndexNode(object):
                 for i, row in enumerate(icell.rowids):
                     if row == old_rowid:
                         icell.rowids[i] = row
-                return
+                        return True
+                return False
             #Check the left path on everything greater than us.
             elif key < icell.key:
                 if p.type != pt.IndexLeaf:
@@ -264,6 +265,7 @@ class IndexNode(object):
         if p.type != pt.IndexLeaf:
             n = ind._fetch_node(p.pnum_right)
             return n.modify(old_rowid,new_rowid,key)
+        return False
     
     def delete(self,rowid,key):
         '''deletes a rowid, key pair. Code implemented similar to the modify code'''
@@ -273,22 +275,29 @@ class IndexNode(object):
         for icell in cells:
             #If the key is equal, delete if it has more than one rowid.
             if icell.key == key:
-                if len(icell.rowids) > 1:
+                if rowid in icell.rowids:
                     icell.rowids.remove(rowid)
+                    return True
                 else:
-                    raise FileFormatError('Cannot delete without removing cell. Database left unchanged.')
-                return
+                    raise ValueError()
+                    return False
+#                if len(icell.rowids) > 1:
+#                    icell.rowids.remove(rowid)
+#                else:
+#                    raise FileFormatError('Cannot delete without removing cell. Database left unchanged.')
             #Check the left path on everything greater than us.
             elif key < icell.key:
                 if p.type != pt.IndexLeaf:
                     n = ind._fetch_node(icell.left_child)
                     return n.delete(rowid,key)
                 else:
-                    return
+                    return False
         #if we made it here, we hit nothing. try the delete on the right child.
         if p.type != pt.IndexLeaf:
             n = ind._fetch_node(p.pnum_right)
             return n.delete(rowid,key)
+        
+        return False
         
     
     #def get_branch(self, rowid):
@@ -387,21 +396,21 @@ class IndexFile(PagingFile):
         if self.__root != None:
             return self.__root.search(key, inequality)
         else:
-            return None
+            return []
     
     def delete(self,rowid,key):
         '''Deletes the rowid, key combination'''
         if self.__root != None:
             return self.__root.delete(rowid,key)
         else:
-            return None
+            return False
     
     def modify(self,old_rowid,new_rowid,key):
         '''Modifys the rowid at key to a new rowid'''
         if self.__root != None:
             return self.__root.delete(old_rowid,new_rowid,key)
         else:
-            return None
+            return False
 
 
 

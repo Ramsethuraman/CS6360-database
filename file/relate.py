@@ -214,15 +214,18 @@ class RelationalDBFile(AbstractDBFile):
             idx.clear()
 
         self.__tbl.clear()
+        self._update_dirty()
         return deleted
 
     def _delete(self, colind, value, cond):
         if cond not in ('=', '!=', '<', '<=', '>', '>='):
             return 0
+        value = self._typecast(self.__cols[colind].dtype, value)
         rowids = list(self._get_index(colind).search(value, cond))
         deleted = 0
         for rid in rowids:
             tup = self.__tbl.select(rid)
+            if tup == None: continue
             if tup[colind] == NULLVAL: # explicitly disallow nulls
                 continue
 
@@ -273,6 +276,7 @@ class RelationalDBFile(AbstractDBFile):
         value = self._typecast(self.__cols[colind].dtype, value)
         for rowid in self._get_index(colind).search(value, cond):
             tup = self.__tbl.select(rowid)
+            if tup == None: continue
             if tup[colind] == NULLVAL: # explicitly disallow nulls
                 continue
             yield tup
@@ -344,7 +348,8 @@ class RelationalDBFile(AbstractDBFile):
         cond_value = self._typecast(self.__cols[cond_colind].dtype, cond_value)
         new_value = self._check_constraint(mod_colind, new_value)
         for rowid in self._get_index(cond_colind).search(cond_value, cond):
-            tup = list(self.__tbl.select(rowid))
+            tup = self.__tbl.select(rowid)
+            if tup == None: continue
             if tup[cond_colind] == NULLVAL: # explicitly disallow nulls
                 continue
 

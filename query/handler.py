@@ -46,6 +46,7 @@ def create_table_query_handler(table_name, column_list):
 
     col_spec = [('rowid', 'INT', 1, False, True)]
     used_names = set(['rowid'])
+    prim = None
     for col in column_list:
         name = col[0]
         if name in used_names:
@@ -65,12 +66,16 @@ def create_table_query_handler(table_name, column_list):
                     is_uniq = True
                 elif val == 'LONG':
                     if dtype != None:
-                        raise DBError('Multiple data types defined')
+                        raise DBError(f'Multiple data types defined: {dtype} ' +\
+                                f'and {val}')
                     dtype = 'BIGINT'
                 elif val in types:
                     if dtype != None:
-                        raise DBError('Multiple data types defined')
+                        raise DBError(f'Multiple data types defined: {dtype} ' +\
+                                f'and {val}')
                     dtype = val
+                elif val == 'PRIMARY':
+                    state = 2
                 else:
                     raise DBError(f'Expected: NOT|UNIQUE|types, got {val}')
             elif state == 1:
@@ -79,10 +84,20 @@ def create_table_query_handler(table_name, column_list):
                     state = 0
                 else:
                     raise DBError('Expected: NULL, got {val}')
+            elif state == 2:
+                if val == 'KEY':
+                    if prim != None:
+                        raise DBError('Only one primary key allowed')
+                    prim = name
+                    state = 0
+                else:
+                    raise DBError('Expected: KEY, got {val}')
 
         col_spec.append((name, dtype, len(col_spec) + 1, is_null, is_uniq))
 
-    create_dbfile(table_name, col_spec)
+    dbfile = create_dbfile(table_name, col_spec)
+    if prim != None:
+        dbfile.create_index(prim)
 
 def select_query_handler(column_list, table_name, where_clause):
     tbl = get_dbfile(table_name)
@@ -115,5 +130,5 @@ def delete_query_handler(table_name, where_clause):
 
 def update_query_handler(table_name, column_name, column_value, where_clause):
     changed = get_dbfile(table_name).modify(column_name, column_value, 
-            *_parse_where(where_cause))
+            *_parse_where(where_clause))
     print(f'Affected rows: {changed}')

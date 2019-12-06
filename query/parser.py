@@ -89,9 +89,9 @@ class DatabaseREPL(cmd.Cmd):
     def onecmd(self, line):
         try:
             return super().onecmd(line)
-#        except DBError as exc:
-#            msg = ' '.join(map(str, exc.args))
-#            self.print_error(msg)
+        except DBError as exc:
+            msg = ' '.join(map(str, exc.args))
+            self.print_error(msg)
         except:
             import traceback
             self.print_error(traceback.format_exc())
@@ -268,18 +268,19 @@ UPDATE table_name SET <mod_column> = <new_value> WHERE <cond_column> <cond> <con
     <cond> can be of the following: <, <=, =, !=, >=, >
         '''
         tkn = Tokenizer(args)
-        table_name = tkn.expect(tt.IDENT)
+        tkn.expect(tt.IDENT)
+        table_name = tkn.lval
         tkn.expect_ident(dc.SET_KEYWORD)
 
         tkn.expect(tt.IDENT)
-        column_name = tkn.lval()
+        column_name = tkn.lval
 
         tkn.expect(tt.OPER)
         if tkn.lval != '=':
             raise DBError(f'Expected: `=` but got `{tkn.lval}`.')
 
         tkn.expect_value()
-        column_value = tkn.lval()
+        column_value = tkn.lval
 
         tkn.expect_ident(dc.WHERE_KEYWORD)
         where_clause = tkn.rest()

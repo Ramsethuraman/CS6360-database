@@ -158,6 +158,7 @@ class AbstractDBFile(object):
     def _project(self, rs, colinds):
         if colinds == None:
             yield from rs
+            return
         for tup in rs:
             yield list(tup[c] for c in colinds)
                 
@@ -185,7 +186,7 @@ class AbstractDBFile(object):
     def modify(self, mod_column, new_value, cond_column, cond_value, cond='='):
         ''' Modifies a column value with all rows that match a condition '''
         return catch_err(self._modify, self._parse_column(mod_column), 
-                new_value, self._parse_column(cond_column), cond_value)
+                new_value, self._parse_column(cond_column), cond_value, cond)
 
     def _modify(self, mod_colind, new_value, cond_colind, cond_value, cond='='):
         changed = 0

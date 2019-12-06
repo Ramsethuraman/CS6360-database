@@ -75,11 +75,9 @@ class DBData(object):
         return self.encode() == other.encode()
 
     def __gt__(self, other):
-        print(other)
         return self.encode() > other.encode()
 
     def __ge__(self, other):
-        print(other)
         return self.encode() >= other.encode()
 
     def __hash__(self):
