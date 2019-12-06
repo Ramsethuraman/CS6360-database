@@ -295,7 +295,10 @@ class TableFile(PagingFile):
                 raise FileFormatError('Corrupted root page number')
 
     @property
-    def root_page(self): return to_signed(self.__root.pagenum)
+    def root_page(self): 
+        if self.__root == None:
+            return to_signed(INVALID_OFF)
+        return to_signed(self.__root.pagenum)
     @property
     def last_rowid(self): return to_signed(self.__lastrowid)
 
@@ -373,6 +376,12 @@ class TableFile(PagingFile):
             self.__dirty.add('root_page')
 
         return rowid
+
+    def clear(self):
+        TableFile._fetch_node.cache_clear()
+        self.file.truncate(0)
+        self.__root = None
+        self.__dirty.add('root_page')
 
     def delete(self, rowid):
         if self.__root == None:

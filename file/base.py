@@ -166,6 +166,7 @@ class AbstractDBFile(object):
         number of rows that are deleted '''
         return catch_err(self._delete, self._parse_column(column), value, cond)
 
+
     def _delete(self, colind, value, cond):
         ''' Implementation-specific version of update. '''
         changed = 0
@@ -174,6 +175,12 @@ class AbstractDBFile(object):
                 changed += 1
                 self.__data.remove(tup)
         return changed
+
+    def deleteall(self):
+        return catch_err(self._deleteall)
+
+    def _deleteall(self):
+        self.__data.clear()
 
     def modify(self, mod_column, new_value, cond_column, cond_value, cond='='):
         ''' Modifies a column value with all rows that match a condition '''
@@ -227,7 +234,9 @@ class AbstractDBFile(object):
             columns = self.__columns
         tab = PrettyTable()
         tab.field_names = columns
+        ct = 0
         for tup in tups:
+            ct += 1
             x = list(tup)
             for i in range(len(x)):
                 if type(x[i]) == bytes:
@@ -238,7 +247,9 @@ class AbstractDBFile(object):
         #    print('+-' + '-' * len(self.name))
         #    print('| ' + self.name)
         print(tab)
+        print(f'{ct} record(s).')
         print('')
+
 
 
 

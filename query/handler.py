@@ -25,7 +25,7 @@ def _parse_where(where_clause):
     if invert:
         oper = invert_map[oper]
 
-    tkn.expect(tt.INT, tt.FLOAT, tt.TEXT)
+    tkn.expect_value()
     val = tkn.lval
     tkn.assert_end()
     return name, val, oper
@@ -106,10 +106,14 @@ def insert_query_handler(table_name, column_list, value_list):
     print(f'Affected rows: 1')
 
 def delete_query_handler(table_name, where_clause):
-    changed = get_dbfile(table_name).delete(*_parse_where())
+    if where_clause == '':
+        #TODO: better performance
+        changed = get_dbfile(table_name).deleteall()
+    else:
+        changed = get_dbfile(table_name).delete(*_parse_where(where_clause))
     print(f'Affected rows: {changed}')
 
 def update_query_handler(table_name, column_name, column_value, where_clause):
-    changed = get_dbfile(table_name).delete(column_name, column_value, 
-            *_parse_where())
+    changed = get_dbfile(table_name).modify(column_name, column_value, 
+            *_parse_where(where_cause))
     print(f'Affected rows: {changed}')

@@ -220,7 +220,7 @@ INSERT INTO table_name (col1[, ...]) VALUES (val1[, ...])
         values = []
         tkn.expect(tt.LP)
         while True:
-            tkn.expect(tt.TEXT, tt.FLOAT, tt.INT) 
+            tkn.expect_value()
             values.append(tkn.lval)
             ttype = tkn.expect(tt.RP, tt.COMMA)
             if ttype == tt.RP:
@@ -242,23 +242,19 @@ DELETE FROM table_name WHERE <column> <cond> <value>
 
     <cond> can be of the following: <, <=, =, !=, >=, >
         '''
-        SYNTAX_ERROR_MSG = 'Syntax error: DELETE FROM table_name WHERE <CONDITION>'
-        command = args.lower().strip().strip(';')
-        split_command = command.split(dc.FROM_KEYWORD.lower() + ' ')
-        if len(split_command) < 2:
-            self.print_error(SYNTAX_ERROR_MSG)
-            return
-        
-        where_keyword_index = split_command[1].find(' ' + dc.WHERE_KEYWORD.lower() + ' ')
-        if where_keyword_index == -1:
-            self.print_error(SYNTAX_ERROR_MSG)
-            return
 
-        table_name = split_command[1][:where_keyword_index].strip()
 
-        where_clause = split_command[1][where_keyword_index + 1 + len(dc.WHERE_KEYWORD):].strip()
-        if not where_clause:
-            self.print_error('Missing where clause')
+        tkn = Tokenizer(args)
+        tkn.expect_ident(dc.FROM_KEYWORD)
+        tkn.expect_ident(dc.TABLE_KEYWORD)
+
+        tkn.expect(tt.IDENT)
+        table_name = tkn.lval
+        if tkn.expect(tt.IDENT, tt.EOF) == tt.IDENT:
+            tkn.expect_cur_ident(dc.WHERE_KEYWORD)
+            where_clause = tkn.rest()
+        else:
+            where_clause = ''
 
         delete_query_handler(table_name, where_clause)
 
@@ -271,33 +267,29 @@ UPDATE table_name SET <mod_column> = <new_value> WHERE <cond_column> <cond> <con
 
     <cond> can be of the following: <, <=, =, !=, >=, >
         '''
-        SYNTAX_ERROR_MSG = 'Syntax error: UPDATE <TABLE_NAME> SET <COLUMN_NAME> = <VALUE> WHERE <CONDITION>'
-        command = args.lower().strip().strip(';')
+        tkn = Tokenizer(args)
+        table_name = tkn.expect(tt.IDENT)
+        tkn.expect_ident(dc.SET_KEYWORD)
 
-        split_command = command.split(' ' + dc.SET_KEYWORD.lower() + ' ')
-        if len(split_command) < 2:
-            self.print_error(SYNTAX_ERROR_MSG)
-            return
+        tkn.expect(tt.IDENT)
+        column_name = tkn.lval()
 
-        table_name = split_command[0].strip()
+        tkn.expect(tt.OPER)
+        if tkn.lval != '=':
+            raise DBError(f'Expected: `=` but got `{tkn.lval}`.')
 
-        where_keyword_index = split_command[1].find(' ' + dc.WHERE_KEYWORD.lower() + ' ')
-        if where_keyword_index == -1:
-            self.print_error(SYNTAX_ERROR_MSG)
-            return
+        tkn.expect_value()
+        column_value = tkn.lval()
 
-        column_str = split_command[1][:where_keyword_index].strip()
-
-        equal_char_index = column_str.find('=')
-        column_name = column_str[:equal_char_index].strip()
-
-        column_value = column_str[equal_char_index + 1:].strip()
-        
-        where_clause = split_command[1][where_keyword_index + 1 + len(dc.WHERE_KEYWORD):].strip()
-        if not where_clause:
-            self.print_error('Missing where clause')
+        tkn.expect_ident(dc.WHERE_KEYWORD)
+        where_clause = tkn.rest()
 
         update_query_handler(table_name, column_name, column_value, where_clause)
+
+    def do_debug(self, args):
+        tkn = Tokenizer(args.strip())
+        tkn.expect_value()
+        print(tkn.lval)
 
     #DQL commands
     def do_select(self, args):
@@ -315,7 +307,7 @@ SELECT <column_set>|* FROM table_name [WHERE <column> <cond> <value>]
         column_list = []
 
         if tkn.expect(tt.IDENT, tt.STAR) == tt.STAR:
-            tkn.expect_ident(dc.FROM_KEYWORD.lower())
+            tkn.expect_ident(dc.FROM_KEYWORD)
             column_list.append('*')
         else:
             column_list.append(tkn.lval)

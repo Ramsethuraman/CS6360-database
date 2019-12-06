@@ -1,5 +1,5 @@
 from enum import Enum
-from file import DBError
+from file import DBError, NULLVAL
 
 import string
 
@@ -45,6 +45,11 @@ class Tokenizer(object):
             raise DBError(f'Expected: ident(s) {names}; but got `{self.__val}`.')
         return idents2.index(self.__val.lower())
 
+    def expect_value(self):
+        if self.expect(tt.IDENT, tt.FLOAT, tt.INT, tt.TEXT) == tt.IDENT:
+            if self.__val.lower() != 'null':
+                raise DBError(f'Expected: int, float, text value, or null; but got `{self.__val}`.')
+            self.__val = NULLVAL
 
     def next_token(self):
         while self.__pos < len(self.__text):
