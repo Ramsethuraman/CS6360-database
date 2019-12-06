@@ -5,7 +5,8 @@ from file.paging import PageTypes as pt
 types = [vt.SMALLINT, vt.TEXT, vt.FLOAT, vt.TINYINT]
 
 #Tag ID     Name     Weight(kg)    Age (years)
-dbfile = PagingFile('dogs.tbl', types)
+#dbfile = PagingFile('tabledogs.tbl', types)
+dbfile = PagingFile('table/test_1.id.ndx', [vt.TINYINT])
 
 
 for i in range(dbfile.next_page()):

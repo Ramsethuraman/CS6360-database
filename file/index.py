@@ -97,7 +97,7 @@ class IndexNode(object):
 
         #Check to see if any of the above recursion returned overflow, if so merge.
         if ovfrow != None:
-            print(str(self.pagenum) + " OVF Returned")
+            #print(str(self.pagenum) + " OVF Returned")
             
             #Check if we found a place or not. If we found a place to insert, we will insert in a left child, otherwise, we will do it in the right child.
             if found: 
@@ -148,7 +148,8 @@ class IndexNode(object):
             return None,None,None,None
     
     def search(self,key,inequality):
-        ''' A recursive search function for a node. Returns a list of rowids. Inequalities are a string representing: == , != , <= , < , > , >= '''
+        ''' A recursive search function for a node. Returns a list of rowids.
+        Inequalities are a string representing: == , != , <= , < , > , >= '''
         p = self.__page
         ind = self.__ind
         cells = p.cells
@@ -156,17 +157,21 @@ class IndexNode(object):
         #If our inequality is equal, just traverse until we hit something greater than us. 
         #If we found something equal, return. Else return a search on the left child. 
         #If nothing is greater, return a search on the right chid.
-        if inequality == '==':
+        if inequality == '=':
             for icell in cells:
                 if icell.key == key:
                     return icell.rowids
                 elif key < icell.key:
-                    #TODO check for type
+                    if p.type == pt.IndexLeaf:
+                        return []
                     n = ind._fetch_node(icell.left_child)
                     return n.search(key,inequality)
-            n = ind.fetch_node(p.pnum_right)
-            return n.search(key,inequality)
 
+            if p.type != pt.IndexLeaf:
+                n = ind._fetch_node(p.pnum_right)
+                return n.search(key,inequality)
+
+            return []
         #This one is the most complicated, so commented in detail.
         elif inequality == '<' or inequality == '<=':
             rowids = []
@@ -196,8 +201,10 @@ class IndexNode(object):
                     return rowids
             #If we're here, it means we never hit the last two cases, meaning we need to search the right child
             if p.type != pt.IndexLeaf:
-                n = ind.fetch_node(p.pnum_right)
+                n = ind._fetch_node(p.pnum_right)
                 return n.search(key,inequality)
+
+            return rowids
 
         elif inequality == '>' or inequality == '>=':
             rowids = []
@@ -214,7 +221,7 @@ class IndexNode(object):
                         rowids += icell.rowids
             #Traverse the right child and return.
             if p.type != pt.IndexLeaf:
-                n = ind.fetch_node(p.pnum_right)
+                n = ind._fetch_node(p.pnum_right)
                 rowids += n.search(key,inequality)
             return rowids   
         
@@ -229,9 +236,11 @@ class IndexNode(object):
                     rowids += n.search(key,inequality)
             #If we are an interior node, traverse the right child.
             if p.type != pt.IndexLeaf:
-                n = ind.fetch_node(p.pnum_right)
+                n = ind._fetch_node(p.pnum_right)
                 rowids += n.search(key,inequality)
             return rowids
+
+
                 
 
     def modify(self,old_rowid,new_rowid,key):
@@ -246,38 +255,49 @@ class IndexNode(object):
                 for i, row in enumerate(icell.rowids):
                     if row == old_rowid:
                         icell.rowids[i] = row
-                return
+                        return True
+                return False
             #Check the left path on everything greater than us.
             elif key < icell.key:
                 if p.type != pt.IndexLeaf:
                     n = ind._fetch_node(icell.left_child)
                     return n.modify(old_rowid,new_rowid,key)
         if p.type != pt.IndexLeaf:
-            n = ind.fetch_node(p.pnum_right)
+            n = ind._fetch_node(p.pnum_right)
             return n.modify(old_rowid,new_rowid,key)
+        return False
     
     def delete(self,rowid,key):
         '''deletes a rowid, key pair. Code implemented similar to the modify code'''
+        p = self.__page
+        ind = self.__ind
+        cells = p.cells
         for icell in cells:
             #If the key is equal, delete if it has more than one rowid.
             if icell.key == key:
-                if len(icell.rowids) > 1:
+                if rowid in icell.rowids:
                     icell.rowids.remove(rowid)
+                    return True
                 else:
-                    raise FileFormatError('Cannot delete without removing cell. Database left unchanged.')
-                return
+                    raise ValueError()
+                    return False
+#                if len(icell.rowids) > 1:
+#                    icell.rowids.remove(rowid)
+#                else:
+#                    raise FileFormatError('Cannot delete without removing cell. Database left unchanged.')
             #Check the left path on everything greater than us.
             elif key < icell.key:
                 if p.type != pt.IndexLeaf:
                     n = ind._fetch_node(icell.left_child)
                     return n.delete(rowid,key)
                 else:
-                    return
+                    return False
         #if we made it here, we hit nothing. try the delete on the right child.
         if p.type != pt.IndexLeaf:
-            n = ind.fetch_node(p.pnum_right)
+            n = ind._fetch_node(p.pnum_right)
             return n.delete(rowid,key)
-    
+        
+        return False
         
     
     #def get_branch(self, rowid):
@@ -364,6 +384,11 @@ class IndexFile(PagingFile):
             #self.__dirty.add('root_page')
 
         return None
+    
+    def clear(self):
+        IndexFile._fetch_node.cache_clear()
+        self.file.truncate(0)
+        self.__root = None
 
     def search(self,key,inequality):
         '''Searches for a key and returns all associated rowids based on inequality, which is a string representing the following:
@@ -371,21 +396,21 @@ class IndexFile(PagingFile):
         if self.__root != None:
             return self.__root.search(key, inequality)
         else:
-            return None
+            return []
     
     def delete(self,rowid,key):
         '''Deletes the rowid, key combination'''
         if self.__root != None:
             return self.__root.delete(rowid,key)
         else:
-            return None
+            return False
     
     def modify(self,old_rowid,new_rowid,key):
         '''Modifys the rowid at key to a new rowid'''
         if self.__root != None:
             return self.__root.delete(old_rowid,new_rowid,key)
         else:
-            return None
+            return False
 
 
 

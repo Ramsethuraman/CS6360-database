@@ -154,17 +154,28 @@ insert into bozo (a, b, c, d, e, f, ff, g, h, i, j, k) values (-75, 5491, -46167
 insert into bozo (a, b, c, d, e, f, ff, g, h, i, j, k) values (-15, -11024, null, null, null, null, null, 2007, '11:33:28', '3722-05-08_21:13:46', '3681-05-13', 'Sarkidornis melanotos');
 insert into bozo (a, b, c, d, e, f, ff, g, h, i, j, k) values (-120, -26376, -748631316, 2101580588768195916, null, -1328.096323, -76844.499951139, null, '0:45:01', '3008-08-28_05:20:00', null, 'Dicrurus adsimilis');
 
+--
+--select * from bozo;
+--
+--debug "***********************************";
+--debug "* SELECTIONS **********************";
+--debug "***********************************";
+--
+--select * from bozo where e = -7407655165748422734;
+--select * from bozo where k = 'Iguana iguana';
+--select * from bozo where i = '3008-08-28_05:20:00';
+--select * from bozo where i < '3008-08-28_05:20:00';
+--
+--debug "***********************************";
+--debug "* SELECTIONS <= 11:33:28 **********";
+--debug "***********************************";
+--sEleCT * FroM bozo wHErE h <= '11:33:28';
+--sEleCT * FroM bozo wHErE h = '11:33:28';
+--
+
 debug "***********************************";
-debug "* SELECTIONS **********************";
+debug "* DELETE 1 ************************";
 debug "***********************************";
-
-select * from bozo where e = -7407655165748422734;
-select * from bozo where k = 'Iguana iguana';
-select * from bozo where i = '3008-08-28_05:20:00';
-select * from bozo where i < '3008-08-28_05:20:00';
-
-sEleCT * FroM bozo wHErE h <= '11:33:28';
-
 dElEte fRom tABLe bozo wHERe not h <= '11:33:28';
 
 select * from bozo where h > '11:33:28';
@@ -172,6 +183,9 @@ select * from bozo where h >= '11:33:28';
 select * from bozo where not h > '11:33:28';
 select * from bozo;
 
+debug "***********************************";
+debug "* DELETE 2 ************************";
+debug "***********************************";
 delete from table bozo;
 select * from bozo;
 
