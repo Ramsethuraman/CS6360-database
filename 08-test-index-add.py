@@ -6,7 +6,7 @@ from file.valuetype import Float32
 from file.valuetype import Date
 import datetime
 
-types = [vt.DATE]
+types = [vt.INT]
 
 #Tag ID     Name     Weight(kg)    Age (years)
 data = ((933,   b'Rover',   Float32(20.6), 4),
@@ -61,7 +61,7 @@ dbfile = IndexFile(open('dogs.ind', 'w+b'), types, 128, root_page = INVALID_OFF)
 #REMOVED LOOP FOR NOW 
 i = 1;
 while True:
-    dbfile.add(i,Date(datetime.datetime(2000+i,12,21)))
+    dbfile.add(i,i)
     i+=1
     for j in range(dbfile.next_page()):
         print(repr(dbfile.read_page(j)))

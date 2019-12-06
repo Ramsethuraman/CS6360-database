@@ -236,8 +236,8 @@ class IndexNode(object):
             #If the key is equal, modify it.
             if icell.key == key:
                 for row in icell.rowids:
-                    if row = old_rowid
-                    row = new_rowid
+                    if row == old_rowid:
+                        row = new_rowid
                 return
             #Check the left path on everything greater than us.
             elif key < icell.key:
