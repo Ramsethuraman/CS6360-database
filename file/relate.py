@@ -57,6 +57,9 @@ class MemoryIndex(object):
             val = self.__idx[key]
         val.add(rowid)
 
+    def clear(self):
+        self.__idx.clear()
+
     def search(self, key, inequality):
         if inequality == '!=':
             for k in self.__idx:
@@ -206,11 +209,9 @@ class RelationalDBFile(AbstractDBFile):
             dbfile_tables.modify(prop, val, 'table_name', self.__name)
 
     def _deleteall(self):
-        deleted = 0
-        for tup in self.__tbl:
-            for cind, idx in self._itr_loaded_index():
-                idx.delete(tup[0], tup[cind])
-            deleted += 1
+        deleted = len(list(self.__tbl))
+        for cind, idx in self._itr_loaded_index():
+            idx.clear()
 
         self.__tbl.clear()
         return deleted
@@ -302,7 +303,7 @@ class RelationalDBFile(AbstractDBFile):
         value = self._typecast(col.dtype, value)
 
         # Check non-null constraints
-        if not col.is_nullable and value == None:
+        if not col.is_nullable and value == NULLVAL:
             raise DBError(f'Column "{col.name}" must be non-NULL')
 
         # Check unique constraints

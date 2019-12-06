@@ -6,8 +6,15 @@ CREATE TABLE test_1 (
 
 insert into test_1 (id, name, salary) values (1, 'Micheal Jordan', 48000);
 insert into test_1 (id, name, salary) values (2, 'Jeff Bezos', 350);
+
+create index test_1 (id);
+create index test_1 (name);
+create index test_1 (salary);
+
+debug '*******************************';
 insert into test_1 (id, name, salary) values (3, 'George Washington', 1);
 insert into test_1 (id, name, salary) values (4, 'Jeb', 123);
+debug '*******************************';
 
 -- Should fail - UNIQUE constraint error
 insert into test_1 (id, name, salary) values (4, 'abc', 123);
