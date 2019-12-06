@@ -97,8 +97,11 @@ class NullType(DBData):
     def __hash__(self): return 0
 
     def __bool__(self): return False
+
     def __gt__(self, other): return False
     def __ge__(self, other): return False
+    def __lt__(self, other): return False
+    def __le__(self, other): return False
 
     def encode(self): return b''
 NULLVAL = NullType()

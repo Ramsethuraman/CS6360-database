@@ -4,6 +4,7 @@ from sortedcontainers import SortedDict
 from .base import AbstractDBFile, FileFormatError, compare, DBError
 from .paging import PagingFile, INVALID_OFF
 from .table import TableFile
+from .index import IndexFile
 from .valuetype import ValueType as vt, parse_from_str, parse_from_int, \
         vpack1, Float32, NULLVAL
 
@@ -35,16 +36,18 @@ class Key(object):
     def __le__(self, other): return compare(self.val, other.val, '<=')
     def __eq__(self, other): return compare(self.val, other.val, '=')
 
+def init_idx_with(idx, tbl, colind):
+    for tup in tbl:
+        rowid = tup[0]
+        idx.add(rowid, tup[colind])
+
 class MemoryIndex(object):
     ''' An ad-hoc memory index file for when an on-file index file does not
     exist. '''
 
     def __init__(self, tbl, colind):
         self.__idx = SortedDict(Key)
-        for tup in tbl:
-            rowid = tup[0]
-            self.add(rowid, tup[colind])
-
+        init_idx_with(self, tbl, colind)
 
     def add(self, rowid, key):
         if key not in self.__idx:
@@ -164,10 +167,13 @@ class RelationalDBFile(AbstractDBFile):
         return path_base + self.__name + '.tbl'
 
     def _create_index(self, colind):
-        idx = None # TODO:
+        index_fname = self._index_file(colind)
+        if os.access(index_fname, os.F_OK):
+            raise DBError(f'Index for column {self.__cols[colind].name} ' + \
+                    'already exists!')
+        idx = IndexFile(open(index_fname, 'w+b'), [self.__cols[colind].dtype])
         self.__idx[colind] = idx
-        # TODO: populate index
-        raise DBError('create_index is not implemented')
+        init_idx_with(idx, self.__tbl, colind)
 
     def _get_index(self, colind, create_mem=True):
         idx = self.__idx[colind] 
@@ -179,7 +185,7 @@ class RelationalDBFile(AbstractDBFile):
         # Otherwise load one if it exists
         index_fname = self._index_file(colind)
         if os.access(index_fname, os.F_OK) :
-            idx = None # TODO: load the file idx
+            idx = IndexFile(open(index_fname, 'r+b'), [self.__cols[colind].dtype])
             self.__idx[colind] = idx
             return idx
 
@@ -337,10 +343,10 @@ class RelationalDBFile(AbstractDBFile):
         cond_value = self._typecast(self.__cols[cond_colind].dtype, cond_value)
         new_value = self._check_constraint(mod_colind, new_value)
         for rowid in self._get_index(cond_colind).search(cond_value, cond):
+            tup = list(self.__tbl.select(rowid))
             if tup[cond_colind] == NULLVAL: # explicitly disallow nulls
                 continue
 
-            tup = list(self.__tbl.select(rowid))
             new_tup = list(tup)
             new_tup[mod_colind] = new_value
             new_rowid = self.__tbl.modify(rowid, new_tup[1:])

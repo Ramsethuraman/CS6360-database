@@ -89,9 +89,9 @@ class DatabaseREPL(cmd.Cmd):
     def onecmd(self, line):
         try:
             return super().onecmd(line)
-        except DBError as exc:
-            msg = ' '.join(map(str, exc.args))
-            self.print_error(msg)
+#        except DBError as exc:
+#            msg = ' '.join(map(str, exc.args))
+#            self.print_error(msg)
         except:
             import traceback
             self.print_error(traceback.format_exc())

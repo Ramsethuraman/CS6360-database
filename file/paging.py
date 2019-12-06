@@ -83,7 +83,12 @@ class IndexLeafCell(DataCell):
         nrows = len(self.rowids)
         if nrows > 255:
             raise FileFormatError('Too many row IDs')
-        return bytes([nrows]) + vpack1(self.tuple_types[0], self.key) + \
+
+        if self.key == NULLVAL:
+            keypack = vpack1(vt.NULL, self.key)
+        else:
+            keypack = vpack1(self.tuple_types[0], self.key)
+        return bytes([nrows]) + keypack + \
                 struct.pack('>' + 'I' * nrows, *self.rowids)
 
 class TableLeafCell(DataCell):

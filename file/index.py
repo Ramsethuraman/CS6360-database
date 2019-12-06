@@ -149,6 +149,10 @@ class IndexNode(object):
     
     def search(self,key,inequality):
         ''' A recursive search function for a node. Returns a list of rowids. Inequalities are a string representing: == , != , <= , < , > , >= '''
+        p = self.__page
+        ind = self.__ind
+        cells = p.cells
+
         #If our inequality is equal, just traverse until we hit something greater than us. 
         #If we found something equal, return. Else return a search on the left child. 
         #If nothing is greater, return a search on the right chid.
@@ -232,12 +236,16 @@ class IndexNode(object):
 
     def modify(self,old_rowid,new_rowid,key):
         '''modifes a rowid, key pair, replacing it with the new_rowid'''
+        p = self.__page
+        ind = self.__ind
+        cells = p.cells
+
         for icell in cells:
             #If the key is equal, modify it.
             if icell.key == key:
-                for row in icell.rowids:
-                    if row = old_rowid
-                    row = new_rowid
+                for i, row in enumerate(icell.rowids):
+                    if row == old_rowid:
+                        icell.rowids[i] = row
                 return
             #Check the left path on everything greater than us.
             elif key < icell.key:
@@ -302,16 +310,10 @@ class IndexNode(object):
         self.writeback()
 
 class IndexFile(PagingFile):
-    # TODO: transactions if we have time
     def __init__(self, *args, **kargs):
-        require_params(kargs, 'root_page')
-
-        #self.__dirty = set()
-        #self.__lastrowid = kargs.pop('last_rowid')
-        root_page = kargs.pop('root_page')
-
         super().__init__(*args, **kargs)
 
+        root_page = self.calc_root()
         if root_page == INVALID_OFF:
             self.__root = None
         else:
@@ -319,26 +321,11 @@ class IndexFile(PagingFile):
             if root.pnum_parent != INVALID_OFF:
                 raise FileFormatError('Corrupted root page number')
 
-
     @property
     def root_page(self):
+        if self.__root == None:
+            return INVALID_OFF
         return self.__root.cur_pnum
-
-    @property
-    def last_rowid(self):
-        return self.__lastrowid
-    
-    
-    def dirty_props(self):
-        ''' Queries and clears any table properties that might be dirty after
-        modifying some internal state of the table. This function will return a
-        dict of all dirty prop names to new prop values. '''
-        dirty = self.__dirty
-        ret = {}
-        self.__dirty = set()
-        
-        for d in dirty:
-            ret[d] = getattr(self, d)
     
     @lru_cache(128)
     def _fetch_node(self, pagenum):
