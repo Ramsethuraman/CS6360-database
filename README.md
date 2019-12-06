@@ -26,5 +26,8 @@ Value types supported:
 	Year
 	
 ************************************
-Assumptions
+Assumptions:
 ************************************
+1) Used a "is_unique" field instead of the column_key field for uniqueness mechanism.
+2) In the B+1 table implementation, in a overflow split of an interior node, only the last child is split, such that the sibiling overflow node is a degree one node, with no cells.
+3) The data points are all small enough to fit in a page.
