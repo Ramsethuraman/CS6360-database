@@ -260,9 +260,9 @@ class RelationalDBFile(AbstractDBFile):
 
         # Update metadata
         name = bytes(self.__name, 'utf8')
-        tblid, = dbfile_tables.select_one('table_name', name, ['rowid'])
+        tblid, = dbfile_tables.select_one('table_name', name, '=', ['rowid'])
         dbfile_columns.delete('table_rowid', tblid)
-        dbfile_tables.delete('table', name)
+#        dbfile_tables.delete('table_name', name)
 
     def _itr_loaded_index(self):
         for cind in range(len(self.__cols)):
@@ -467,7 +467,7 @@ def get_dbfile(table_name):
         raise DBError(f'Table {table_name} does not exist!')
 
     rowid, _, root, last_rowid = dbfile_tables.select_one('table_name',
-            table_name)
+            table_name, '=')
 
     col_specs = _meta.get_column_specs(rowid)
     tbl = RelationalDBFile((table_name, root, last_rowid), col_specs)

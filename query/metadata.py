@@ -88,6 +88,6 @@ def deinit_metadata_for(table_name):
     tbl_tables = get_meta_tables()
     tbl_columns = get_meta_columns()
 
-    tblid, = tbl_tables.select_one('table_name', table_name, ['rowid'])
+    tblid, = tbl_tables.select_one('table_name', table_name, '=', ['rowid'])
     tbl_columns.delete('table_rowid', tblid)
-    tbl_tables.delete('table', table_name)
+    tbl_tables.delete('table_name', table_name)
